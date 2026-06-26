@@ -1,0 +1,1911 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Worky — Revenue Operations Intelligence</title>
+<script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: #183B59; font-family: 'Inter','Segoe UI',sans-serif; color: #fff; }
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: #183B59; }
+::-webkit-scrollbar-thumb { background: #254F79; border-radius: 3px; }
+input[type=range] { height: 4px; cursor: pointer; }
+select option { background: #1C4266; color: #fff; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useEffect, useRef } = React;
+
+// ── PALETTE ──────────────────────────────────────────────────────────────────
+const C={
+  // Worky official brand palette
+  navy:"#183B59",       // Dark navy — main background
+  navyMid:"#1C4266",    // Card / panel background
+  navyLt:"#254F79",     // Borders, dividers
+  teal:"#07B2D9",       // Bright cyan — primary CTA/highlight
+  tealDim:"#0A8CBF",    // Steel blue — secondary accent
+  sand:"#DFEDF2",       // Ice blue light — light text on dark
+  sandDim:"#B0CCDB",    // Muted light text
+  red:"#E8445A",        // Danger/alerts
+  amber:"#F5A623",      // Warnings / upsell
+  green:"#27C07A",      // Success
+  purple:"#D282F5",     // Worky violet — primary brand accent
+  blue:"#0A8CBF",       // Info / steel blue
+  white:"#FFFFFF",      // Headings
+  muted:"#6B93AD",      // Muted text on dark
+};
+const prioColor={Alta:C.red,Media:C.amber,Baja:C.teal};
+const ALL_MODULES=["Nómina","Control de Asistencia","Organigrama","Vacaciones","Reclutamiento","Evaluación de Desempeño","Portal del Empleado","Gastos","Contratos","Reportes IMSS"];
+const campNames=["Ana Martínez","Sofía Ruiz","Valeria Torres","Daniela López","Fernanda Gómez"];
+const csNames=["Luis Herrera","Karla Mendoza","Diego Ramírez","Paola Vega"];
+const industries=["Manufactura","Retail","Servicios Financieros","Salud","Logística","Tecnología","Construcción","Educación","Hotelería","Comercio al por Mayor","Consultoría","Medios","Farmacéutica","Alimentos y Bebidas","Automotriz"];
+const cities=["CDMX","Monterrey","Guadalajara","Querétaro","Puebla","León","Tijuana","Mérida"];
+const painPool=["Nómina manual en Excel","Errores en cálculo IMSS","Sin control asistencia digital","Alta rotación de personal","Reportes HR tardíos","Cumplimiento SAT desactualizado","Sistemas desconectados","Sin portal de autoservicio","Cálculo manual de vacaciones","Sin visibilidad de organigrama"];
+const compets=["ADP","CONTPAQi","Aspel NOI","SAP HR","Microsip","Sistema interno","Excel manual"];
+
+function rnd(a,b){return Math.floor(Math.random()*(b-a+1))+a;}
+function pick(a){return a[Math.floor(Math.random()*a.length)];}
+function pickN(a,n){return [...a].sort(()=>0.5-Math.random()).slice(0,n);}
+function fmtMXN(v){return`$${(v/1000).toFixed(1)}K`;}
+function fmtDate(d,offset=0){const r=new Date(d);r.setDate(r.getDate()+offset);return r.toLocaleDateString("es-MX",{day:"numeric",month:"short"});}
+
+// ── DATA GENERATION ───────────────────────────────────────────────────────────
+function generateClients(){
+  return Array.from({length:200},(_,i)=>{
+    const seg=i<70?"0-100":i<140?"100-500":"500+";
+    const emp=seg==="0-100"?rnd(15,99):seg==="100-500"?rnd(100,499):rnd(500,3000);
+    const mrr=seg==="0-100"?rnd(2500,8000):seg==="100-500"?rnd(8000,35000):rnd(35000,150000);
+    const nps=rnd(3,10),usage=rnd(20,100),tickets=rnd(2,60),upsells=rnd(0,4);
+    const inactivity=rnd(1,90);
+    const churn=nps<5||usage<35||(tickets>40&&nps<6);
+    let q;
+    if(churn)q="Perdido";
+    else if(upsells>=2&&usage>70&&nps>=8&&tickets<20)q="Champion";
+    else if(!churn&&usage>60&&nps>=7&&upsells>=0)q="Maduro";
+    else q="En Riesgo";
+    const t1=rnd(60,100),t2=rnd(40,95),t3=rnd(20,85);
+    const mods=pickN(ALL_MODULES,rnd(2,6));
+    const cycle=seg==="0-100"?rnd(7,30):seg==="100-500"?rnd(20,60):rnd(45,120);
+    const expansionMRR=upsells>0?mrr*rnd(5,20)/100:0;
+    const downsell=Math.random()<0.08;
+    const downsellAmt=downsell?mrr*rnd(10,30)/100:0;
+    return{
+      id:`WRK-${String(i+1).padStart(3,"0")}`,
+      name:`${pick(["Grupo","Corporativo","Empresa","Comercializadora","Distribuidora"])} ${pick(["Azteca","Norteño","Del Bajío","Central","Metropolitano","Premium","Express","Nacional","Industrial","Comercial","Sigma","Alpha","Beta","Delta","Omega","Monterrey","Jalisco","Capital","Sureste","Occidente"])} ${pick(["S.A. de C.V.","S.A.P.I.","S. de R.L.","S.C.","S.A."])}`,
+      industry:pick(industries),city:pick(cities),employees:emp,empBucket:seg,mrr,
+      salesCycleDays:cycle,startMonthsAgo:rnd(3,48),upsells,tickets,nps,usage,
+      growth:rnd(-30,60),modules:mods,quadrant:q,churn,
+      crmScore:Math.round(t1*0.5+t2*0.3+t3*0.2),tier1:t1,tier2:t2,tier3:t3,
+      camp:pick(campNames),csOwner:pick(csNames),lastActivity:inactivity,
+      ltv:mrr*rnd(12,48),cacPayback:rnd(4,18),
+      mainPain:pickN(painPool,rnd(1,3)),prevSoftware:pick(compets),
+      budget:mrr*rnd(11,14),expansionMRR,downsell,downsellAmt,
+      product:mods.includes("Nómina")&&mods.length>2?"Worky + Nómina":mods.includes("Nómina")?"Solo Nómina":"Worky",
+    };
+  });
+}
+
+// Pipeline deals per rep
+function generatePipeline(){
+  const stages=["SQL","Demo","Por Cerrar"];
+  const decisores=["Carlos Mendoza (CFO)","Laura Ríos (CHRO)","Miguel Ángel Torres (Director Ops)","Patricia Vega (CEO)","Roberto Salinas (Dir. RRHH)","Ana González (COO)","Jorge Ramírez (VP Finanzas)","Sandra López (Dir. Admin)"];
+  const timelines=["Q3 2026","Q4 2026","Enero 2027","Inmediato","90 días","Fin de año"];
+  const pains=["Nómina manual en Excel","Errores frecuentes en IMSS","Sin portal de autoservicio","Alta rotación y sin datos","Reportes HR tardíos","Sin control de asistencia digital","Cumplimiento SAT desactualizado","Cálculo manual de vacaciones"];
+  const modCombos=[["Nómina","Control de Asistencia"],["Nómina","Organigrama","Portal del Empleado"],["Nómina","Vacaciones","Contratos"],["Control de Asistencia","Reportes IMSS"],["Nómina","Evaluación de Desempeño","Reclutamiento"],["Nómina","Gastos","Portal del Empleado"]];
+  const stakeholderPool=["Gerente de RRHH","Director Financiero","CEO","VP Operaciones","Jefe de Nómina","Contralor"];
+
+  const required={
+    SQL:["Empresa","No. empleados","Industria","Decisor","Presupuesto anual","Timeline"],
+    Demo:["Empresa","No. empleados","Industria","Decisor","Presupuesto anual","Timeline","Módulos interés","Software actual","Fecha demo","Pain principal"],
+    "Por Cerrar":["Empresa","No. empleados","Industria","Decisor","Presupuesto anual","Timeline","Módulos interés","Software actual","Fecha demo","Pain principal","Propuesta enviada","Fecha cierre est.","Monto MRR","Stakeholders"],
+  };
+
+  function realValue(field, ctx){
+    const {name,employees,industry,mrr,seg}=ctx;
+    if(field==="Empresa") return name;
+    if(field==="No. empleados") return String(employees);
+    if(field==="Industria") return industry;
+    if(field==="Decisor") return pick(decisores);
+    if(field==="Presupuesto anual") return `$${(mrr*12/1000).toFixed(0)}K MXN`;
+    if(field==="Timeline") return pick(timelines);
+    if(field==="Módulos interés") return pick(modCombos).join(", ");
+    if(field==="Software actual") return pick(compets);
+    if(field==="Fecha demo"){const d=new Date();d.setDate(d.getDate()+rnd(-7,14));return d.toLocaleDateString("es-MX",{day:"numeric",month:"short",year:"numeric"});}
+    if(field==="Pain principal") return pick(pains);
+    if(field==="Propuesta enviada"){const d=new Date();d.setDate(d.getDate()-rnd(2,10));return d.toLocaleDateString("es-MX",{day:"numeric",month:"short"});}
+    if(field==="Fecha cierre est."){const d=new Date();d.setDate(d.getDate()+rnd(7,45));return d.toLocaleDateString("es-MX",{day:"numeric",month:"short",year:"numeric"});}
+    if(field==="Monto MRR") return `$${(mrr/1000).toFixed(1)}K/mes`;
+    if(field==="Stakeholders") return pickN(stakeholderPool,rnd(2,3)).join(", ");
+    return null;
+  }
+
+  const deals=[];
+  campNames.forEach(camp=>{
+    stages.forEach(stage=>{
+      const n=stage==="SQL"?rnd(3,7):stage==="Demo"?rnd(2,5):rnd(1,3);
+      Array.from({length:n}).forEach((_,i)=>{
+        const seg=pick(["0-100","100-500","500+"]);
+        const mrr=seg==="0-100"?rnd(2500,8000):seg==="100-500"?rnd(8000,35000):rnd(35000,120000);
+        const employees=seg==="0-100"?rnd(20,99):seg==="100-500"?rnd(100,499):rnd(500,2000);
+        const industry=pick(industries);
+        const name=`${pick(["Grupo","Empresa","Distribuidora","Comercializadora"])} ${pick(["Sigma","Alpha","Norte","Capital","Express","Beta","Delta","Norteño","Industrial","Premium"])} ${pick(["S.A.","S.A. de C.V.","S.R.L.","S.A.P.I."])}`;
+        const req=required[stage];
+        const ctx={name,employees,industry,mrr,seg};
+        const fields={};
+        // Probability of filling: SQL=70%, Demo=80%, Por Cerrar=90%
+        const fillProb=stage==="SQL"?0.70:stage==="Demo"?0.80:0.90;
+        req.forEach(f=>{fields[f]=Math.random()<fillProb?realValue(f,ctx):null;});
+        const filled=Object.values(fields).filter(Boolean).length;
+        deals.push({
+          id:`PL-${camp.split(" ")[1][0]}${stage[0]}${i+1}`,
+          camp,stage,mrr,seg,name,industry,employees,
+          fields,fillPct:Math.round((filled/req.length)*100),
+          daysInStage:rnd(1,stage==="SQL"?14:stage==="Demo"?21:30),
+        });
+      });
+    });
+  });
+  return deals;
+}
+
+const ALL_CLIENTS=generateClients();
+const ALL_PIPELINE=generatePipeline();
+
+const QUAD={
+  "Champion":{color:"#07B2D9",icon:"🏆",label:"Champions",desc:"Alto uso · NPS 8+ · Upsell activo"},
+  "Maduro":{color:"#27C07A",icon:"📈",label:"Maduros",desc:"Estables · Potencial expansión"},
+  "En Riesgo":{color:"#F5A623",icon:"⚠️",label:"En Riesgo",desc:"Bajo uso o NPS · Atención urgente"},
+  "Perdido":{color:"#E8445A",icon:"🔴",label:"Posible Churn",desc:"Churn confirmado o en riesgo crítico"},
+};
+const QUAD_ASSUMPTIONS={
+  Champion:{
+    color:"#07B2D9",icon:"🏆",title:"Champion",
+    rules:[
+      {met:"✅",label:"NPS ≥ 8",detail:"Score de promotor activo, alta probabilidad de referidos"},
+      {met:"✅",label:"Uso de features ≥ 70%",detail:"Adopción profunda: nómina, IMSS, asistencia y al menos 1 módulo adicional"},
+      {met:"✅",label:"Upsells ≥ 2",detail:"Ha expandido su contrato al menos dos veces, confirma valor percibido"},
+      {met:"✅",label:"Tickets de soporte < 20",detail:"Baja fricción operativa, equipo autosuficiente en la plataforma"},
+      {met:"✅",label:"Inactividad < 15 días",detail:"Login frecuente, datos actualizados, engagement alto"},
+    ],
+    risk:"Si NPS baja de 8 o uso cae bajo 55%, el cliente puede pasar a Maduro o En Riesgo.",
+    action:"Programa QBR trimestral, propón nuevos módulos, convierte en caso de éxito o referidor.",
+  },
+  Maduro:{
+    color:"#27C07A",icon:"📈",title:"Maduro",
+    rules:[
+      {met:"✅",label:"NPS ≥ 7",detail:"Cliente satisfecho pero sin advocate activo todavía"},
+      {met:"✅",label:"Uso de features ≥ 60%",detail:"Usa los módulos principales, aún no adopta todos los disponibles"},
+      {met:"⚠️",label:"Upsells 0–1",detail:"Potencial de expansión sin explotar — oportunidad de Revenue"},
+      {met:"✅",label:"Sin señales de churn",detail:"No está en riesgo crítico pero puede estancarse"},
+      {met:"✅",label:"Tickets manejables < 35",detail:"Operación normal, sin escalaciones críticas"},
+    ],
+    risk:"Sin intervención proactiva puede volverse indiferente. El riesgo es la no-renovación silenciosa.",
+    action:"Activa secuencia de upsell. Ofrece demo de módulos no contratados. Programa check-in mensual.",
+  },
+  "En Riesgo":{
+    color:"#F5A623",icon:"⚠️",title:"En Riesgo",
+    rules:[
+      {met:"🔴",label:"NPS < 6 O uso < 45%",detail:"Señal temprana de desenganche — el cliente no encuentra valor suficiente"},
+      {met:"🔴",label:"Tickets de soporte > 35",detail:"Alta fricción: problemas sin resolver que erosionan la confianza"},
+      {met:"🔴",label:"Inactividad > 30 días",detail:"Sin login reciente = probable búsqueda de alternativas (ADP, CONTPAQi)"},
+      {met:"⚠️",label:"Cero upsells en 12+ meses",detail:"No está expandiendo — señal de valor percibido bajo"},
+      {met:"⚠️",label:"Cambio de decisor o CS",detail:"Turnover interno resetea la relación y el conocimiento de la plataforma"},
+    ],
+    risk:"Sin acción en 30 días, 60-70% de probabilidad de que pase a Perdido o no renueve.",
+    action:"Escala a CS Senior. Diagnóstico de fricción. Ofrece training o implementación de módulos no usados.",
+  },
+  Perdido:{
+    color:"#E8445A",icon:"🔴",title:"Posible Churn",
+    rules:[
+      {met:"🔴",label:"NPS < 5",detail:"Detractor activo — puede dañar reputación con referidos negativos"},
+      {met:"🔴",label:"Uso de features < 35%",detail:"No están usando la plataforma; el costo de oportunidad superó el valor percibido"},
+      {met:"🔴",label:"Tickets > 40 con NPS < 6",detail:"Combinación letal: problema sistémico + cliente insatisfecho"},
+      {met:"🔴",label:"Contrato no renovado o cancelado",detail:"Formalización del churn — perdida confirmada de MRR"},
+      {met:"🔴",label:"Inactividad > 60 días",detail:"Abandono total de la plataforma antes del fin de contrato"},
+    ],
+    risk:"MRR perdido. Prioridad: win-back campaign si fue por precio/implementación. Análisis de causa raíz obligatorio.",
+    action:"Entrevista de salida. Documenta causa raíz en CRM. Si es recuperable: oferta especial + reonboarding.",
+  },
+};
+
+const DB_SUMMARY=`Worky RevOps — 200 clientes SaaS RRHH/nómina México.
+Segmentos: ${ALL_CLIENTS.filter(c=>c.empBucket==="0-100").length} pymes, ${ALL_CLIENTS.filter(c=>c.empBucket==="100-500").length} medianas, ${ALL_CLIENTS.filter(c=>c.empBucket==="500+").length} enterprise.
+Champions ${ALL_CLIENTS.filter(c=>c.quadrant==="Champion").length}, Maduros ${ALL_CLIENTS.filter(c=>c.quadrant==="Maduro").length}, En Riesgo ${ALL_CLIENTS.filter(c=>c.quadrant==="En Riesgo").length}, Perdidos ${ALL_CLIENTS.filter(c=>c.quadrant==="Perdido").length}.
+MRR total activo: $${(ALL_CLIENTS.filter(c=>!c.churn).reduce((s,c)=>s+c.mrr,0)/1000).toFixed(0)}K MXN.
+NPS promedio: ${(ALL_CLIENTS.reduce((s,c)=>s+c.nps,0)/200).toFixed(1)}/10. Churn rate: ${((ALL_CLIENTS.filter(c=>c.churn).length/200)*100).toFixed(0)}%.
+Pipeline activo: ${ALL_PIPELINE.length} deals en SQL/Demo/Por Cerrar.`;
+
+// ── SHARED UI COMPONENTS ──────────────────────────────────────────────────────
+function Badge({color,children,small}){return <span style={{background:color+"22",color,border:`1px solid ${color}44`,borderRadius:4,padding:small?"2px 6px":"3px 10px",fontSize:small?10:11,fontWeight:700,whiteSpace:"nowrap"}}>{children}</span>;}
+function MiniBar({value,max,color}){return <div style={{background:C.navyLt,borderRadius:3,height:6,width:"100%",overflow:"hidden"}}><div style={{width:`${Math.min(100,(value/max)*100)}%`,height:"100%",background:color,borderRadius:3,transition:"width 0.5s"}}/></div>;}
+function StatCard({label,value,color,icon,sub}){return <div style={{background:C.navyMid,border:`1px solid ${C.navyLt}`,borderRadius:10,padding:"16px 18px",flex:1,minWidth:130}}><div style={{fontSize:20,marginBottom:4}}>{icon}</div><div style={{color:color||C.teal,fontSize:24,fontWeight:800,lineHeight:1}}>{value}</div><div style={{color:C.sandDim,fontSize:11,marginTop:4}}>{label}</div>{sub&&<div style={{color:C.muted,fontSize:10,marginTop:2}}>{sub}</div>}</div>;}
+
+// Rich text renderer — zero # or ** in output
+function RichText({text}){
+  if(!text)return null;
+  const lines=text.split("\n");
+  const out=[];let buf=[];let mode="p";
+  const flush=()=>{if(buf.length){out.push({type:mode,lines:[...buf]});buf=[];}};
+  lines.forEach(raw=>{
+    const l=raw.trim();
+    if(!l){flush();mode="p";return;}
+    if(l.startsWith("##")||l.startsWith("#")){flush();out.push({type:"h",text:l.replace(/^#+\s*/,"").replace(/\*\*/g,"")});return;}
+    if(l.startsWith("- ")||l.startsWith("• ")||l.startsWith("* ")){if(mode!=="ul"){flush();mode="ul";}buf.push(l.slice(2).replace(/\*\*/g,""));return;}
+    if(/^\d+\./.test(l)){if(mode!=="ol"){flush();mode="ol";}buf.push(l.replace(/^\d+\.\s*/,"").replace(/\*\*/g,""));return;}
+    if(l.startsWith("|")){if(mode!=="tbl"){flush();mode="tbl";}buf.push(l);return;}
+    if(mode!=="p"){flush();mode="p";}buf.push(l.replace(/\*\*/g,""));
+  });
+  flush();
+  return <div style={{display:"flex",flexDirection:"column",gap:5}}>
+    {out.map((b,i)=>{
+      if(b.type==="h")return <div key={i} style={{color:C.teal,fontWeight:800,fontSize:12,marginTop:i?12:0,paddingBottom:4,borderBottom:`1px solid ${C.navyLt}`}}>{b.text}</div>;
+      if(b.type==="ul")return <div key={i} style={{display:"flex",flexDirection:"column",gap:3}}>{b.lines.map((l,j)=><div key={j} style={{display:"flex",gap:7,color:C.sandDim,fontSize:12,lineHeight:1.6}}><span style={{color:C.teal,flexShrink:0}}>›</span><span>{l}</span></div>)}</div>;
+      if(b.type==="ol")return <div key={i} style={{display:"flex",flexDirection:"column",gap:3}}>{b.lines.map((l,j)=><div key={j} style={{display:"flex",gap:7,color:C.sandDim,fontSize:12,lineHeight:1.6}}><span style={{color:C.purple,minWidth:16,fontWeight:700,flexShrink:0}}>{j+1}.</span><span>{l}</span></div>)}</div>;
+      if(b.type==="tbl"){
+        const rows=b.lines.filter(r=>!r.match(/^[\|\s\-:]+$/));
+        if(rows.length<2)return null;
+        const hdrs=rows[0].split("|").map(h=>h.trim()).filter(Boolean);
+        const data=rows.slice(1).map(r=>r.split("|").map(c=>c.trim()).filter(Boolean));
+        return <div key={i} style={{overflowX:"auto",margin:"4px 0"}}><table style={{width:"100%",borderCollapse:"collapse",fontSize:11}}>
+          <thead><tr style={{background:C.navyLt}}>{hdrs.map((h,j)=><th key={j} style={{padding:"5px 9px",textAlign:"left",color:C.teal,fontWeight:700,fontSize:10,whiteSpace:"nowrap"}}>{h}</th>)}</tr></thead>
+          <tbody>{data.map((row,j)=><tr key={j} style={{background:j%2?C.navyMid:C.navy,borderBottom:`1px solid ${C.navyLt}22`}}>{row.map((cell,k)=><td key={k} style={{padding:"5px 9px",color:C.sandDim,fontSize:11}}>{cell}</td>)}</tr>)}</tbody>
+        </table></div>;
+      }
+      return <div key={i} style={{color:C.sandDim,fontSize:12,lineHeight:1.7}}>{b.lines.join(" ")}</div>;
+    })}
+  </div>;
+}
+
+function InlineChart({data,type}){
+  if(!data?.labels||!data?.values)return null;
+  const max=Math.max(...data.values,1);
+  const cols=[C.teal,C.purple,C.amber,C.green,C.red,C.sandDim];
+  return <div style={{background:C.navy,borderRadius:8,padding:12,margin:"6px 0",border:`1px solid ${C.navyLt}`}}>
+    {data.title&&<div style={{color:C.teal,fontWeight:700,fontSize:11,marginBottom:8}}>{data.title}</div>}
+    <div style={{display:"flex",flexDirection:"column",gap:6}}>
+      {data.labels.map((l,i)=>(
+        <div key={i} style={{display:"flex",alignItems:"center",gap:7}}>
+          <div style={{color:C.muted,fontSize:10,minWidth:90,textAlign:"right",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{l}</div>
+          <div style={{flex:1,background:C.navyLt,borderRadius:3,height:16,overflow:"hidden"}}>
+            <div style={{width:`${(data.values[i]/max)*100}%`,height:"100%",background:cols[i%cols.length],borderRadius:3,display:"flex",alignItems:"center",paddingLeft:5}}>
+              <span style={{color:C.navy,fontSize:9,fontWeight:700}}>{data.values[i]}{data.unit||""}</span>
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
+  </div>;
+}
+
+// ── HUBSPOT / SLACK PANELS ────────────────────────────────────────────────────
+function HubspotPanel({client,onClose}){
+  const flds=[
+    {key:"nps",label:"NPS Score",type:"number",min:0,max:10,val:client.nps},
+    {key:"usage",label:"Feature Usage %",type:"number",min:0,max:100,val:client.usage},
+    {key:"quadrant",label:"Cuadrante",type:"select",options:["Champion","Maduro","En Riesgo","Perdido"],val:client.quadrant},
+    {key:"csOwner",label:"CS Owner",type:"select",options:csNames,val:client.csOwner},
+    {key:"nextStep",label:"Próximo Paso",type:"text",val:"Llamada de seguimiento"},
+    {key:"stage",label:"Deal Stage",type:"select",options:["Customer","Prospecto","Churned"],val:"Customer"},
+  ];
+  const [vals,setV]=useState(()=>Object.fromEntries(flds.map(f=>[f.key,f.val])));
+  const [saved,setSaved]=useState(false);
+  const [saving,setSaving]=useState(false);
+  function save(){setSaving(true);setTimeout(()=>{setSaving(false);setSaved(true);setTimeout(()=>setSaved(false),3000);},1100);}
+  return <div style={{background:C.navyMid,border:"2px solid #FF7A59",borderRadius:10,padding:14,margin:"8px 0"}}>
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+      <div style={{display:"flex",alignItems:"center",gap:8}}>
+        <div style={{background:"#FF7A59",borderRadius:5,padding:"2px 7px",fontSize:10,fontWeight:800,color:C.white}}>HS</div>
+        <span style={{color:C.white,fontWeight:700,fontSize:12}}>HubSpot · {client.id}</span>
+        <Badge color={C.green} small>● Live</Badge>
+      </div>
+      <button onClick={onClose} style={{background:"none",border:"none",color:C.muted,cursor:"pointer",fontSize:15}}>✕</button>
+    </div>
+    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+      {flds.map(f=><div key={f.key}>
+        <div style={{color:C.muted,fontSize:10,fontWeight:700,marginBottom:2}}>{f.label}</div>
+        {f.type==="select"
+          ?<select value={vals[f.key]} onChange={e=>setV(v=>({...v,[f.key]:e.target.value}))} style={{width:"100%",background:C.navy,border:`1px solid ${C.navyLt}`,borderRadius:4,padding:"4px 7px",color:C.white,fontSize:11}}>
+            {f.options.map(o=><option key={o}>{o}</option>)}
+          </select>
+          :<input type={f.type} min={f.min} max={f.max} value={vals[f.key]} onChange={e=>setV(v=>({...v,[f.key]:e.target.value}))} style={{width:"100%",background:C.navy,border:`1px solid ${C.navyLt}`,borderRadius:4,padding:"4px 7px",color:C.white,fontSize:11,boxSizing:"border-box"}}/>
+        }
+      </div>)}
+    </div>
+    <div style={{display:"flex",justifyContent:"flex-end",marginTop:10,gap:8,alignItems:"center"}}>
+      {saved&&<span style={{color:C.green,fontSize:11}}>✅ Guardado en HubSpot</span>}
+      <button onClick={save} disabled={saving} style={{background:saving?C.navyLt:"#FF7A59",color:C.white,border:"none",borderRadius:6,padding:"6px 16px",fontWeight:700,fontSize:11,cursor:"pointer"}}>
+        {saving?"Sincronizando...":"Guardar →"}
+      </button>
+    </div>
+  </div>;
+}
+
+function SlackPanel({client,onClose}){
+  const channels=["#cs-general","#ventas","#revenue-ops","#alertas-clientes"];
+  const [ch,setCh]=useState("#cs-general");
+  const nm=client.name.split(" ").slice(0,3).join(" ");
+  const [msg,setMsg]=useState(`Hola equipo 👋 Update sobre ${nm}: NPS ${client.nps}/10, uso ${client.usage}%. CS: ${client.csOwner}.`);
+  const [sent,setSent]=useState(false);
+  const [sending,setSending]=useState(false);
+  function send(){setSending(true);setTimeout(()=>{setSending(false);setSent(true);setTimeout(()=>setSent(false),3000);},800);}
+  return <div style={{background:C.navyMid,border:"2px solid #4A154B",borderRadius:10,padding:14,margin:"8px 0"}}>
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+      <div style={{display:"flex",alignItems:"center",gap:8}}>
+        <div style={{background:"#4A154B",borderRadius:5,padding:"2px 7px",fontSize:10,fontWeight:800,color:C.white}}>Slack</div>
+        <span style={{color:C.white,fontWeight:700,fontSize:12}}>Notificar al equipo</span>
+        <Badge color={C.green} small>● Live</Badge>
+      </div>
+      <button onClick={onClose} style={{background:"none",border:"none",color:C.muted,cursor:"pointer",fontSize:15}}>✕</button>
+    </div>
+    <div style={{marginBottom:7}}>
+      <div style={{color:C.muted,fontSize:10,fontWeight:700,marginBottom:4}}>CANAL</div>
+      <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>{channels.map(c=><button key={c} onClick={()=>setCh(c)} style={{background:ch===c?"#4A154B":C.navyLt,color:ch===c?C.white:C.muted,border:`1px solid ${ch===c?"#7B2D8B":C.navyLt}`,borderRadius:4,padding:"3px 9px",fontSize:10,cursor:"pointer"}}>{c}</button>)}</div>
+    </div>
+    <textarea value={msg} onChange={e=>setMsg(e.target.value)} rows={2} style={{width:"100%",background:C.navy,border:`1px solid ${C.navyLt}`,borderRadius:5,padding:"7px 9px",color:C.white,fontSize:11,resize:"vertical",boxSizing:"border-box"}}/>
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginTop:8}}>
+      {sent?<span style={{color:C.green,fontSize:11}}>✅ Enviado a {ch}</span>:<span/>}
+      <button onClick={send} disabled={sending} style={{background:sending?C.navyLt:"#4A154B",color:C.white,border:"none",borderRadius:6,padding:"6px 16px",fontWeight:700,fontSize:11,cursor:"pointer"}}>
+        {sending?"Enviando...":"Enviar →"}
+      </button>
+    </div>
+  </div>;
+}
+
+// ── VIDEO BRIEF ────────────────────────────────────────────────────────────────
+// One voice utterance per slide, synced via slide index ref
+function VideoBrief({client,brief}){
+  const canvasRef=useRef(null);
+  const rafRef=useRef(null);
+  const startRef=useRef(null);
+  const prevSlideRef=useRef(-1);
+  const [playing,setPlaying]=useState(false);
+  const [done,setDone]=useState(false);
+  const [progress,setProgress]=useState(0);
+  const [curSlide,setCurSlide]=useState(0);
+
+  const SD=10000; // 10s per slide
+  const SLIDE_LABELS=["Portada","Intro","Company","Deal Intel","Módulos","Key Points","Métricas","Handoff"];
+  const TOTAL=SLIDE_LABELS.length*SD;
+
+  const briefBullets=brief
+    ? brief.split("\n").filter(l=>(l.startsWith("- ")||l.startsWith("• "))&&l.length>10)
+        .slice(0,4).map(l=>l.replace(/^[-•]\s/,"").replace(/\*\*/g,""))
+    : ["Implementar nómina 100% digital y CFDI","Activar portal empleado para autoservicio","Revisar módulos no adoptados en los primeros 30 días"];
+  while(briefBullets.length<3)briefBullets.push(["Reducir fricción operativa de RRHH","Consolidar reportes SAT-IMSS en una sola plataforma","Capacitar al equipo en los módulos clave"][briefBullets.length]||"Agendar QBR a los 60 días");
+
+  const scripts=[
+    `Bienvenido al brief de cuenta para ${client.name.split(" ").slice(0,3).join(" ")}. Cuadrante: ${client.quadrant}.`,
+    `La empresa pertenece al sector ${client.industry}, tiene ${client.employees} empleados en ${client.city}. Su MRR actual es de ${(client.mrr/1000).toFixed(1)} mil pesos. Su principal problema reportado es: ${client.mainPain[0]||"optimización de nómina"}.`,
+    `Es una empresa del segmento ${client.empBucket} empleados que venía usando ${client.prevSoftware}. Tienen un presupuesto anual de ${(client.budget/1000).toFixed(0)} mil pesos.`,
+    `El ciclo de venta fue de ${client.salesCycleDays} días. El CAC payback estimado es de ${client.cacPayback} meses. El LTV proyectado es de ${(client.ltv/1000).toFixed(0)} mil pesos.`,
+    `Actualmente tienen contratados ${client.modules.length} de los ${ALL_MODULES.length} módulos disponibles. Los módulos sin contratar representan una oportunidad de expansión de MRR.`,
+    `Puntos clave para Customer Success: ${briefBullets.slice(0,2).join(". ")}.`,
+    `El NPS actual es de ${client.nps} sobre diez. La adopción de funcionalidades está al ${client.usage} por ciento. Hay ${client.tickets} tickets de soporte abiertos.`,
+    `Trato cerrado por ${client.camp}. CS Owner asignado: ${client.csOwner}. Revisa este brief completo antes del kickoff. Mucho éxito.`,
+  ];
+
+  function getVoice(){
+    const vs=window.speechSynthesis?.getVoices()||[];
+    return vs.find(v=>v.lang==="es-MX")||vs.find(v=>v.lang==="es-US")||vs.find(v=>v.lang.startsWith("es")&&v.name.toLowerCase().includes("google"))||vs.find(v=>v.lang.startsWith("es"))||null;
+  }
+
+  function speakSlide(idx){
+    if(!window.speechSynthesis||idx>=scripts.length)return;
+    window.speechSynthesis.cancel();
+    const utt=new SpeechSynthesisUtterance(scripts[idx]);
+    utt.lang="es-MX";utt.rate=0.87;utt.pitch=1.08;utt.volume=1;
+    const v=getVoice();
+    if(v)utt.voice=v;
+    window.speechSynthesis.speak(utt);
+  }
+
+  // Canvas helpers
+  function rRect(ctx,x,y,w,h,r){
+    ctx.beginPath();ctx.moveTo(x+r,y);ctx.lineTo(x+w-r,y);ctx.arcTo(x+w,y,x+w,y+r,r);
+    ctx.lineTo(x+w,y+h-r);ctx.arcTo(x+w,y+h,x+w-r,y+h,r);
+    ctx.lineTo(x+r,y+h);ctx.arcTo(x,y+h,x,y+h-r,r);ctx.lineTo(x,y+r);ctx.arcTo(x,y,x+r,y,r);ctx.closePath();
+  }
+  function wrapText(ctx,text,x,y,maxW,lineH){
+    const words=String(text).split(" ");let line="",ly=y;
+    words.forEach(w=>{const t=line+w+" ";if(ctx.measureText(t).width>maxW&&line){ctx.fillText(line.trim(),x,ly);line=w+" ";ly+=lineH;}else line=t;});
+    if(line.trim())ctx.fillText(line.trim(),x,ly);
+    return ly;
+  }
+  function bgGrid(ctx,W,H){
+    ctx.fillStyle="#183B59";ctx.fillRect(0,0,W,H);
+    ctx.strokeStyle="#254F79";ctx.lineWidth=0.25;
+    for(let x=0;x<W;x+=36){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke();}
+    for(let y=0;y<H;y+=36){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke();}
+  }
+  function drawHdr(ctx,W,gprog,sIdx){
+    // Progress bar
+    ctx.fillStyle=C.navyLt;ctx.fillRect(0,0,W,3);
+    ctx.fillStyle=C.teal;ctx.fillRect(0,0,W*gprog,3);
+    // Logo
+    ctx.fillStyle="#D282F5";rRect(ctx,12,9,52,19,4);ctx.fill();
+    ctx.fillStyle="#FFFFFF";ctx.font="bold 10px 'Inter',sans-serif";ctx.textAlign="left";ctx.fillText("WORKY",18,22);
+    // Slide label on right
+    ctx.fillStyle=C.muted;ctx.font="9px sans-serif";ctx.textAlign="right";
+    ctx.fillText(`${SLIDE_LABELS[sIdx]} · ${sIdx+1}/${SLIDE_LABELS.length}`,W-12,21);
+  }
+  function drawFtr(ctx,W,H){
+    ctx.fillStyle=C.navyLt;ctx.fillRect(0,H-18,W,18);
+    ctx.fillStyle=C.muted;ctx.font="8px sans-serif";ctx.textAlign="left";
+    ctx.fillText(`${client.id} · CONFIDENCIAL · Worky RevOps AI`,10,H-5);
+    ctx.textAlign="right";ctx.fillText(new Date().toLocaleDateString("es-MX"),W-10,H-5);
+  }
+
+  function drawSlide(ctx,sIdx,p,W,H){
+    bgGrid(ctx,W,H);
+    const gprog=Math.min(1,(sIdx*SD+p*SD)/TOTAL);
+    drawHdr(ctx,W,gprog,sIdx);
+    drawFtr(ctx,W,H);
+    const TOP=34;// content starts here
+    const a=Math.min(1,p*6);// fade-in alpha
+    ctx.globalAlpha=a;
+    const qc=QUAD[client.quadrant]?.color||C.teal;
+
+    if(sIdx===0){// COVER
+      ctx.fillStyle=qc+"33";rRect(ctx,W/2-130,TOP+10,260,40,8);ctx.fill();
+      ctx.fillStyle=qc;ctx.font="bold 13px sans-serif";ctx.textAlign="center";
+      ctx.fillText(`${QUAD[client.quadrant]?.icon}  ${client.quadrant.toUpperCase()}`,W/2,TOP+36);
+      ctx.fillStyle=C.white;ctx.font="bold 22px sans-serif";
+      const nm=client.name.split(" ").slice(0,4).join(" ");
+      const nw=ctx.measureText(nm).width;
+      if(nw>W-40){ctx.font="bold 17px sans-serif";}
+      ctx.fillText(nm,W/2,TOP+80);
+      ctx.fillStyle=C.muted;ctx.font="10px sans-serif";
+      ctx.fillText("ACCOUNT BRIEF · WORKY RevOps Intelligence",W/2,TOP+100);
+      ctx.fillStyle=C.teal;ctx.fillRect(W/2-60,TOP+110,120,2);
+      ctx.fillStyle=C.sandDim;ctx.font="11px sans-serif";
+      ctx.fillText(`${client.industry} · ${client.city} · ${client.employees} empleados`,W/2,TOP+130);
+    }
+    else if(sIdx===1){// INTRO — MRR + industry + pain points
+      ctx.fillStyle=C.teal;ctx.font="bold 13px sans-serif";ctx.textAlign="left";ctx.fillText("Resumen Ejecutivo",16,TOP+16);
+      ctx.fillStyle=C.navyLt;ctx.fillRect(16,TOP+22,W-32,1);
+      // 3 KPI boxes
+      const kpis=[{l:"MRR",v:`$${(client.mrr/1000).toFixed(1)}K`,c:C.green},{l:"Empleados",v:String(client.employees),c:C.teal},{l:"Segmento",v:client.empBucket+" emp",c:C.purple}];
+      kpis.forEach((k,i)=>{
+        const bw=(W-40)/3,bx=16+i*(bw+4);
+        const ka=Math.min(1,Math.max(0,(p-i*0.06)*8));ctx.globalAlpha=ka;
+        ctx.fillStyle=k.c+"22";rRect(ctx,bx,TOP+28,bw,44,6);ctx.fill();
+        ctx.fillStyle=k.c;ctx.font="bold 19px sans-serif";ctx.textAlign="center";ctx.fillText(k.v,bx+bw/2,TOP+55);
+        ctx.fillStyle=C.muted;ctx.font="9px sans-serif";ctx.fillText(k.l,bx+bw/2,TOP+68);
+      });
+      ctx.globalAlpha=Math.min(1,Math.max(0,(p-0.2)*5));
+      // Industry row
+      ctx.fillStyle=C.navyMid;rRect(ctx,16,TOP+80,W-32,24,5);ctx.fill();
+      ctx.fillStyle=C.amber;ctx.font="9px sans-serif";ctx.textAlign="left";ctx.fillText("INDUSTRIA",26,TOP+90);
+      ctx.fillStyle=C.white;ctx.font="bold 12px sans-serif";ctx.fillText(client.industry,26,TOP+102);
+      ctx.fillStyle=C.amber;ctx.textAlign="right";ctx.font="9px sans-serif";ctx.fillText("CIUDAD",W-26,TOP+90);
+      ctx.fillStyle=C.white;ctx.font="bold 12px sans-serif";ctx.fillText(client.city,W-26,TOP+102);
+      // Pain points
+      ctx.globalAlpha=Math.min(1,Math.max(0,(p-0.35)*5));
+      const ppH=14+client.mainPain.length*22;
+      ctx.fillStyle=C.red+"18";rRect(ctx,16,TOP+112,W-32,ppH+4,5);ctx.fill();
+      ctx.fillStyle=C.red;ctx.font="bold 9px sans-serif";ctx.textAlign="left";ctx.fillText("⚡ PAIN POINTS REPORTADOS",24,TOP+124);
+      client.mainPain.forEach((pp,i)=>{
+        const pa=Math.min(1,Math.max(0,(p-0.4-i*0.08)*6));ctx.globalAlpha=pa;
+        ctx.fillStyle=C.sandDim;ctx.font="11px sans-serif";ctx.fillText(`› ${pp}`,24,TOP+140+i*22);
+      });
+      ctx.globalAlpha=1;
+    }
+    else if(sIdx===2){// COMPANY
+      ctx.fillStyle=C.teal;ctx.font="bold 13px sans-serif";ctx.textAlign="left";ctx.fillText("Company Overview",16,TOP+16);
+      ctx.fillStyle=C.navyLt;ctx.fillRect(16,TOP+22,W-32,1);
+      const rows=[
+        {l:"Industria",v:client.industry,c:C.teal},{l:"Ciudad / HQ",v:client.city,c:C.sandDim},
+        {l:"Software anterior",v:client.prevSoftware,c:C.red},{l:"Budget anual",v:`$${(client.budget/1000).toFixed(0)}K MXN`,c:C.green},
+        {l:"LTV estimado",v:`$${(client.ltv/1000).toFixed(0)}K MXN`,c:C.purple},
+      ];
+      rows.forEach((r,i)=>{
+        const yy=TOP+30+i*38;const ra=Math.min(1,Math.max(0,(p-i*0.1)*6));ctx.globalAlpha=ra;
+        ctx.fillStyle=C.navyMid;rRect(ctx,16,yy,W-32,30,5);ctx.fill();
+        ctx.fillStyle=C.muted;ctx.font="9px sans-serif";ctx.textAlign="left";ctx.fillText(r.l,24,yy+11);
+        ctx.fillStyle=r.c;ctx.font="bold 12px sans-serif";ctx.fillText(r.v,24,yy+24);
+      });
+      ctx.globalAlpha=1;
+    }
+    else if(sIdx===3){// DEAL INTEL
+      ctx.fillStyle=C.amber;ctx.font="bold 13px sans-serif";ctx.textAlign="left";ctx.fillText("Deal Intelligence",16,TOP+16);
+      ctx.fillStyle=C.navyLt;ctx.fillRect(16,TOP+22,W-32,1);
+      const rows=[
+        {l:"Ciclo de venta",v:`${client.salesCycleDays} días`,c:client.salesCycleDays<30?C.green:C.amber},
+        {l:"CAC Payback",v:`${client.cacPayback} meses`,c:C.sandDim},
+        {l:"Vendedora",v:client.camp,c:C.purple},
+        {l:"CS Owner",v:client.csOwner,c:C.teal},
+        {l:"Meses como cliente",v:`${client.startMonthsAgo}m`,c:C.sandDim},
+      ];
+      rows.forEach((r,i)=>{
+        const yy=TOP+30+i*38;const ra=Math.min(1,Math.max(0,(p-i*0.1)*6));ctx.globalAlpha=ra;
+        ctx.fillStyle=C.navyMid;rRect(ctx,16,yy,W-32,30,5);ctx.fill();
+        ctx.fillStyle=C.muted;ctx.font="9px sans-serif";ctx.textAlign="left";ctx.fillText(r.l,24,yy+11);
+        ctx.fillStyle=r.c;ctx.font="bold 12px sans-serif";ctx.fillText(r.v,24,yy+24);
+      });
+      ctx.globalAlpha=1;
+    }
+    else if(sIdx===4){// MODULES TABLE
+      ctx.fillStyle=C.teal;ctx.font="bold 12px sans-serif";ctx.textAlign="left";ctx.fillText("Módulos — Contratados vs Disponibles",16,TOP+16);
+      ctx.fillStyle=C.navyLt;ctx.fillRect(16,TOP+22,W-32,1);
+      const half=Math.ceil(ALL_MODULES.length/2);
+      const bw=(W-40)/2;
+      ALL_MODULES.forEach((mod,i)=>{
+        const col=i<half?0:1;
+        const row=i<half?i:i-half;
+        const bx=16+col*(bw+6);
+        const yy=TOP+28+row*24;
+        const contracted=client.modules.includes(mod);
+        const ma=Math.min(1,Math.max(0,(p-i*0.05)*7));ctx.globalAlpha=ma;
+        ctx.fillStyle=contracted?C.teal+"28":C.navyMid;
+        rRect(ctx,bx,yy,bw,20,4);ctx.fill();
+        ctx.fillStyle=contracted?C.teal:C.muted;ctx.font=contracted?"bold 10px sans-serif":"10px sans-serif";ctx.textAlign="left";
+        ctx.fillText(contracted?"✓":"○",bx+5,yy+14);
+        ctx.fillStyle=contracted?C.white:C.muted;
+        ctx.font=contracted?"bold 9px sans-serif":"9px sans-serif";
+        // Truncate if too long
+        let modLabel=mod;
+        ctx.textAlign="left";
+        if(ctx.measureText(modLabel).width>bw-40)modLabel=modLabel.substring(0,14)+"…";
+        ctx.fillText(modLabel,bx+18,yy+14);
+        if(!contracted){
+          ctx.fillStyle=C.amber+"28";rRect(ctx,bx+bw-34,yy+4,30,12,3);ctx.fill();
+          ctx.fillStyle=C.amber;ctx.font="7px sans-serif";ctx.textAlign="right";ctx.fillText("Opp",bx+bw-6,yy+13);
+        }
+      });
+      ctx.globalAlpha=1;
+      // legend
+      ctx.globalAlpha=Math.min(1,p*4);
+      ctx.fillStyle=C.teal+"22";rRect(ctx,16,H-38,80,16,3);ctx.fill();
+      ctx.fillStyle=C.teal;ctx.font="9px sans-serif";ctx.textAlign="left";ctx.fillText("✓ Contratado",22,H-27);
+      ctx.fillStyle=C.amber+"22";rRect(ctx,102,H-38,90,16,3);ctx.fill();
+      ctx.fillStyle=C.amber;ctx.fillText("○ Oportunidad",108,H-27);
+      ctx.globalAlpha=1;
+    }
+    else if(sIdx===5){// KEY POINTS
+      ctx.fillStyle=C.purple;ctx.font="bold 13px sans-serif";ctx.textAlign="left";ctx.fillText("Puntos Clave para CS",16,TOP+16);
+      ctx.fillStyle=C.navyLt;ctx.fillRect(16,TOP+22,W-32,1);
+      briefBullets.slice(0,4).forEach((b,i)=>{
+        const yy=TOP+30+i*56;const ba=Math.min(1,Math.max(0,(p-i*0.18)*5));ctx.globalAlpha=ba;
+        ctx.fillStyle=C.navyMid;rRect(ctx,16,yy,W-32,48,7);ctx.fill();
+        ctx.fillStyle=C.purple;ctx.font="bold 18px sans-serif";ctx.textAlign="left";ctx.fillText(String(i+1),24,yy+30);
+        ctx.fillStyle=C.sandDim;ctx.font="10.5px sans-serif";ctx.textAlign="left";
+        wrapText(ctx,b,44,yy+18,W-68,14);
+      });
+      ctx.globalAlpha=1;
+    }
+    else if(sIdx===6){// METRICS
+      ctx.fillStyle=C.green;ctx.font="bold 13px sans-serif";ctx.textAlign="left";ctx.fillText("Health Metrics",16,TOP+16);
+      ctx.fillStyle=C.navyLt;ctx.fillRect(16,TOP+22,W-32,1);
+      const ms=[
+        {l:"NPS Score",v:client.nps,max:10,c:client.nps>=8?C.green:client.nps>=6?C.amber:C.red,fmt:`${client.nps}/10`},
+        {l:"Adopción Features",v:client.usage,max:100,c:client.usage>70?C.green:client.usage>45?C.amber:C.red,fmt:`${client.usage}%`},
+        {l:"Tickets Soporte",v:Math.min(client.tickets,60),max:60,c:client.tickets<20?C.green:client.tickets<40?C.amber:C.red,fmt:String(client.tickets)},
+        {l:"Upsells realizados",v:client.upsells,max:4,c:C.purple,fmt:String(client.upsells)},
+      ];
+      ms.forEach((m,i)=>{
+        const yy=TOP+28+i*48;const ma=Math.min(1,Math.max(0,(p-i*0.14)*6));ctx.globalAlpha=ma;
+        ctx.fillStyle=C.muted;ctx.font="9px sans-serif";ctx.textAlign="left";ctx.fillText(m.l,16,yy+12);
+        const barW=W-100;
+        ctx.fillStyle=C.navyLt;rRect(ctx,16,yy+18,barW,11,5);ctx.fill();
+        const fill=barW*(m.v/m.max)*Math.min(1,(p-i*0.14)*3);
+        if(fill>0){ctx.fillStyle=m.c;rRect(ctx,16,yy+18,Math.max(6,fill),11,5);ctx.fill();}
+        ctx.fillStyle=m.c;ctx.font="bold 16px sans-serif";ctx.textAlign="right";ctx.fillText(m.fmt,W-12,yy+30);
+      });
+      ctx.globalAlpha=1;
+    }
+    else if(sIdx===7){// HANDOFF
+      ctx.fillStyle=C.green;ctx.font="bold 13px sans-serif";ctx.textAlign="left";ctx.fillText("Handoff",16,TOP+16);
+      ctx.fillStyle=C.navyLt;ctx.fillRect(16,TOP+22,W-32,1);
+      const items=[{l:"Cerrado por",v:client.camp,c:C.purple},{l:"CS Owner",v:client.csOwner,c:C.teal},{l:"Próxima Acción",v:"Revisar brief → Agendar kickoff 🚀",c:C.green}];
+      items.forEach((item,i)=>{
+        const yy=TOP+30+i*60;const ia=Math.min(1,Math.max(0,(p-i*0.2)*5));ctx.globalAlpha=ia;
+        ctx.fillStyle=C.navyMid;rRect(ctx,16,yy,W-32,50,7);ctx.fill();
+        ctx.fillStyle=item.c;ctx.font="bold 9px sans-serif";ctx.textAlign="left";ctx.fillText(item.l,24,yy+14);
+        ctx.fillStyle=C.white;ctx.font="12px sans-serif";
+        wrapText(ctx,item.v,24,yy+30,W-52,14);
+      });
+      ctx.globalAlpha=1;
+    }
+    ctx.globalAlpha=1;
+  }
+
+  function animate(){
+    const cv=canvasRef.current;if(!cv)return;
+    const ctx=cv.getContext("2d");
+    const elapsed=Date.now()-startRef.current;
+    const gp=Math.min(1,elapsed/TOTAL);
+    setProgress(gp);
+    const sIdx=Math.min(SLIDE_LABELS.length-1,Math.floor(elapsed/SD));
+    const sp=Math.min(1,(elapsed-sIdx*SD)/SD);
+    setCurSlide(sIdx);
+    // Speak when slide changes
+    if(sIdx!==prevSlideRef.current){
+      prevSlideRef.current=sIdx;
+      speakSlide(sIdx);
+    }
+    drawSlide(ctx,sIdx,sp,cv.width,cv.height);
+    if(elapsed>=TOTAL){setPlaying(false);setDone(true);window.speechSynthesis?.cancel();return;}
+    rafRef.current=requestAnimationFrame(animate);
+  }
+
+  function start(){
+    const cv=canvasRef.current;if(!cv)return;
+    prevSlideRef.current=-1;
+    startRef.current=Date.now();
+    setPlaying(true);setDone(false);setProgress(0);setCurSlide(0);
+    if(rafRef.current)cancelAnimationFrame(rafRef.current);
+    // Pre-load voices
+    const vv=window.speechSynthesis?.getVoices()||[];
+    if(!vv.length&&window.speechSynthesis){window.speechSynthesis.onvoiceschanged=()=>{};}
+    rafRef.current=requestAnimationFrame(animate);
+  }
+  function stop(){
+    if(rafRef.current)cancelAnimationFrame(rafRef.current);
+    window.speechSynthesis?.cancel();
+    setPlaying(false);
+  }
+
+  useEffect(()=>{
+    const cv=canvasRef.current;if(!cv||!client)return;
+    drawSlide(cv.getContext("2d"),0,0,cv.width,cv.height);
+    return()=>{if(rafRef.current)cancelAnimationFrame(rafRef.current);window.speechSynthesis?.cancel();};
+  },[client,brief]);
+
+  return <div style={{background:C.navyMid,border:`1px solid ${C.teal}44`,borderRadius:10,overflow:"hidden"}}>
+    <div style={{padding:"8px 14px",borderBottom:`1px solid ${C.navyLt}`,display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:6}}>
+      <div style={{color:C.teal,fontWeight:800,fontSize:11}}>🎬 VIDEO BRIEF · VOZ ESPAÑOL · {SLIDE_LABELS.length} SLIDES</div>
+      <div style={{display:"flex",gap:4,alignItems:"center"}}>
+        {SLIDE_LABELS.map((l,i)=>(
+          <span key={i} title={l} style={{width:8,height:8,borderRadius:"50%",background:i===curSlide&&playing?C.teal:C.navyLt,display:"inline-block",transition:"background 0.3s"}}/>
+        ))}
+        <span style={{color:C.muted,fontSize:9,marginLeft:4}}>{SLIDE_LABELS[curSlide]}</span>
+      </div>
+    </div>
+    <canvas ref={canvasRef} width={480} height={300} style={{width:"100%",display:"block",maxWidth:480,background:C.navy}}/>
+    <div style={{padding:"8px 14px",display:"flex",gap:8,alignItems:"center",background:C.navy}}>
+      {!playing
+        ?<button onClick={start} style={{background:C.teal,color:C.navy,border:"none",borderRadius:7,padding:"7px 18px",fontWeight:800,fontSize:12,cursor:"pointer"}}>▶ {done?"Reproducir de nuevo":"Play Brief"}</button>
+        :<button onClick={stop} style={{background:C.red,color:C.white,border:"none",borderRadius:7,padding:"7px 18px",fontWeight:800,fontSize:12,cursor:"pointer"}}>⏹ Detener</button>
+      }
+      <div style={{flex:1,background:C.navyLt,borderRadius:3,height:4,overflow:"hidden"}}>
+        <div style={{width:`${progress*100}%`,height:"100%",background:C.teal,transition:"width 0.3s",borderRadius:3}}/>
+      </div>
+      <span style={{color:C.muted,fontSize:10}}>~{Math.round(TOTAL/60000)} min</span>
+    </div>
+    <div style={{padding:"4px 14px",background:C.navyLt+"33",fontSize:9,color:C.muted}}>
+      🔊 Voz orgánica en español (es-MX) · Sincronizada slide a slide
+    </div>
+  </div>;
+}
+
+// ── CHATBOT ───────────────────────────────────────────────────────────────────
+
+function GmailModal({text, client, onClose}){
+  const [to, setTo] = useState("");
+  const [subject, setSubject] = useState(`RevOps Brief — ${client?.name?.split(" ").slice(0,3).join(" ")||"Cliente"} · Worky`);
+  const [body, setBody] = useState(text||"");
+
+  function openMailto(){
+    if(!to){alert("Ingresa un destinatario");return;}
+    const encoded = encodeURIComponent(body);
+    const encodedSubj = encodeURIComponent(subject);
+    const encodedTo = encodeURIComponent(to);
+    window.open(`mailto:${encodedTo}?subject=${encodedSubj}&body=${encoded}`, "_blank");
+    setTimeout(onClose, 800);
+  }
+
+  return <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.82)",zIndex:9999,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
+    <div style={{background:C.navyMid,border:"2px solid #EA4335",borderRadius:14,padding:22,maxWidth:520,width:"100%",maxHeight:"88vh",overflowY:"auto"}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
+        <div style={{display:"flex",alignItems:"center",gap:8}}>
+          <div style={{background:"#EA4335",borderRadius:5,padding:"3px 8px",fontSize:11,fontWeight:800,color:"#fff"}}>Gmail</div>
+          <span style={{color:C.white,fontWeight:800,fontSize:13}}>Enviar por correo</span>
+        </div>
+        <button onClick={onClose} style={{background:"none",border:"none",color:C.muted,cursor:"pointer",fontSize:16}}>✕</button>
+      </div>
+      <div style={{marginBottom:10}}>
+        <div style={{color:C.muted,fontSize:10,fontWeight:700,marginBottom:4}}>PARA</div>
+        <input value={to} onChange={e=>setTo(e.target.value)} placeholder="correo@empresa.com" style={{width:"100%",background:C.navy,border:`1px solid ${C.navyLt}`,borderRadius:6,padding:"7px 10px",color:C.white,fontSize:12,boxSizing:"border-box"}}/>
+      </div>
+      <div style={{marginBottom:10}}>
+        <div style={{color:C.muted,fontSize:10,fontWeight:700,marginBottom:4}}>ASUNTO</div>
+        <input value={subject} onChange={e=>setSubject(e.target.value)} style={{width:"100%",background:C.navy,border:`1px solid ${C.navyLt}`,borderRadius:6,padding:"7px 10px",color:C.white,fontSize:12,boxSizing:"border-box"}}/>
+      </div>
+      <div style={{marginBottom:14}}>
+        <div style={{color:C.muted,fontSize:10,fontWeight:700,marginBottom:4}}>CUERPO</div>
+        <textarea value={body} onChange={e=>setBody(e.target.value)} rows={10} style={{width:"100%",background:C.navy,border:`1px solid ${C.navyLt}`,borderRadius:6,padding:"8px 10px",color:C.white,fontSize:11,resize:"vertical",boxSizing:"border-box",lineHeight:1.7}}/>
+      </div>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+        <div style={{color:C.muted,fontSize:10}}>Abre tu cliente de correo con todo pre-llenado</div>
+        <button onClick={openMailto} style={{background:"#EA4335",color:"#fff",border:"none",borderRadius:7,padding:"9px 22px",fontWeight:800,fontSize:12,cursor:"pointer"}}>
+          📧 Abrir y Enviar →
+        </button>
+      </div>
+    </div>
+  </div>;
+}
+
+
+function ChatMsg({m,client}){
+  const [hs,setHs]=useState(false);
+  const [sl,setSl]=useState(false);
+  const [gmail,setGmail]=useState(false);
+  const isUser=m.role==="user";
+  const hasHs=m.hsAction||m.text?.includes("[[HUBSPOT]]");
+  const hasSl=m.slAction||m.text?.includes("[[SLACK]]");
+  const clean=(m.text||"").replace("[[HUBSPOT]]","").replace("[[SLACK]]","").trim();
+  return <div style={{display:"flex",gap:7,justifyContent:isUser?"flex-end":"flex-start"}}>
+    {!isUser&&<div style={{width:24,height:24,borderRadius:"50%",background:C.teal,display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:800,color:C.navy,flexShrink:0}}>W</div>}
+    <div style={{maxWidth:"88%",display:"flex",flexDirection:"column",gap:5}}>
+      <div style={{background:isUser?C.teal+"22":C.navyLt,borderRadius:8,padding:"8px 11px",border:`1px solid ${isUser?C.teal+"44":C.navyLt}`}}>
+        {isUser?<div style={{color:C.sandDim,fontSize:12,lineHeight:1.6}}>{clean}</div>:<RichText text={clean}/>}
+      </div>
+      {m.chartData&&<InlineChart data={m.chartData} type={m.chartType||"bar"}/>}
+      {!isUser&&<div style={{display:"flex",gap:5,flexWrap:"wrap",marginTop:2}}>
+        {(hasHs||hasSl)&&!hs&&!sl&&<>
+          {hasHs&&<button onClick={()=>setHs(true)} style={{background:"#FF7A5922",color:"#FF7A59",border:"1px solid #FF7A5944",borderRadius:5,padding:"3px 9px",fontSize:10,fontWeight:700,cursor:"pointer"}}>🔗 Editar en HubSpot</button>}
+          {hasSl&&<button onClick={()=>setSl(true)} style={{background:"#4A154B22",color:"#E01E5A",border:"1px solid #4A154B44",borderRadius:5,padding:"3px 9px",fontSize:10,fontWeight:700,cursor:"pointer"}}>💬 Enviar a Slack</button>}
+        </>}
+        <button onClick={()=>setGmail(true)} style={{background:"#EA433518",color:"#EA4335",border:"1px solid #EA433544",borderRadius:5,padding:"3px 9px",fontSize:10,fontWeight:700,cursor:"pointer"}}>📧 Enviar por Gmail</button>
+      </div>}
+      {hs&&client&&<HubspotPanel client={client} onClose={()=>setHs(false)}/>}
+      {sl&&client&&<SlackPanel client={client} onClose={()=>setSl(false)}/>}
+      {gmail&&<GmailModal text={clean} client={client} onClose={()=>setGmail(false)}/>}
+    </div>
+  </div>;
+}
+
+function ChatbotPanel({client,brief,clients}){
+  const [msgs,setMsgs]=useState([]);
+  const [inp,setInp]=useState("");
+  const [loading,setLoading]=useState(false);
+  const endRef=useRef(null);
+  const indStats=[...new Set(clients.map(c=>c.industry))].map(ind=>{
+    const g=clients.filter(c=>c.industry===ind);
+    return `${ind}: ${g.length} clientes, NPS ${(g.reduce((s,c)=>s+c.nps,0)/g.length).toFixed(1)}, churn ${((g.filter(c=>c.churn).length/g.length)*100).toFixed(0)}%`;
+  }).join("; ");
+
+  useEffect(()=>{
+    if(client)setMsgs([{role:"assistant",text:`Hola 👋 Soy el asistente RevOps de Worky. Tengo acceso a ${clients.length} clientes y al brief de ${client.name.split(" ").slice(0,3).join(" ")}.\n\nPuedo responder con tablas y gráficas. Comandos rápidos:\n- /comparar — vs promedio del segmento\n- /upsell — módulos sin contratar\n- /churn — factores de riesgo\n- /hubspot — editar campos CRM\n- /slack — notificar al equipo\n\n¿En qué te ayudo?`}]);
+  },[client]);
+  useEffect(()=>{endRef.current?.scrollIntoView({behavior:"smooth"});},[msgs]);
+
+  async function send(ov){
+    const txt=(ov||inp).trim();if(!txt||loading)return;
+    setInp("");
+    setMsgs(prev=>[...prev,{role:"user",text:txt}]);
+    setLoading(true);
+    const isHs=txt.startsWith("/hubspot")||txt.toLowerCase().includes("hubspot")||txt.toLowerCase().includes("editar campo");
+    const isSl=txt.startsWith("/slack")||txt.toLowerCase().includes("slack")||txt.toLowerCase().includes("notificar");
+    const clientCtx=client?`CLIENTE ACTIVO: ${client.name} (${client.id}) | ${client.industry} | ${client.employees} emp | MRR $${client.mrr.toLocaleString()} | NPS ${client.nps}/10 | Uso ${client.usage}% | Tickets ${client.tickets} | Upsells ${client.upsells} | Cuadrante ${client.quadrant} | CS ${client.csOwner} | Vendedora ${client.camp} | Módulos: ${client.modules.join(", ")} | Dolores: ${client.mainPain.join("; ")}`:
+      "Sin cliente activo.";
+    const sys=`Eres el asistente de Revenue Operations de Worky (SaaS RRHH/nómina México).
+${DB_SUMMARY}
+STATS INDUSTRIA: ${indStats}
+${clientCtx}
+${brief?"BRIEF:\n"+brief.slice(0,400):""}
+
+REGLAS DE FORMATO (OBLIGATORIAS):
+- CERO signos # o ** en toda la respuesta
+- Secciones con emoji en línea propia (ej: "📊 Comparativa de Segmento")
+- Tablas con pipes | Col | Val |
+- Responde en español, conciso y accionable
+- Para /comparar: tabla cliente vs promedio segmento y vs promedio total
+- Para /upsell: tabla módulos no contratados, adopción promedio en segmento, potencial MRR
+- Para /churn: tabla de factores de riesgo con nivel de impacto
+- Si piden gráfica o comparación: añade al final CHART_JSON:{"type":"bar","title":"...","labels":[...],"values":[...],"unit":""}
+- Si acción requiere HubSpot: pon [[HUBSPOT]] al inicio
+- Si acción requiere Slack: pon [[SLACK]] al inicio`;
+    try{
+      const hist=msgs.slice(-8).map(m=>({role:m.role==="user"?"user":"assistant",content:m.text}));
+      const res=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:900,system:sys,messages:[...hist,{role:"user",content:txt}]})});
+      const data=await res.json();
+      let text=data.content?.find(b=>b.type==="text")?.text||"Error.";
+      let chartData=null,chartType=null;
+      const cm=text.match(/CHART_JSON:(\{[\s\S]*?\})/);
+      if(cm){try{const cd=JSON.parse(cm[1]);chartData=cd;chartType=cd.type||"bar";}catch{}text=text.replace(/CHART_JSON:[\s\S]*$/,"").trim();}
+      setMsgs(prev=>[...prev,{role:"assistant",text,chartData,chartType,hsAction:isHs,slAction:isSl}]);
+    }catch{setMsgs(prev=>[...prev,{role:"assistant",text:"Error al conectar con la API."}]);}
+    setLoading(false);
+  }
+
+  const cmds=["/comparar","/upsell","/churn","/hubspot","/slack","¿Cuál industria tiene más churn?"];
+  return <div style={{background:C.navyMid,borderRadius:10,border:`1px solid ${C.navyLt}`,display:"flex",flexDirection:"column",height:540}}>
+    <div style={{padding:"9px 14px",borderBottom:`1px solid ${C.navyLt}`,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+      <div><div style={{color:C.teal,fontWeight:800,fontSize:11}}>🤖 ASISTENTE REVOPS · WORKY AI</div><div style={{color:C.muted,fontSize:10}}>{clients.length} clientes · HubSpot + Slack simulados · Gráficas inline</div></div>
+      <Badge color={C.green} small>● LIVE</Badge>
+    </div>
+    <div style={{flex:1,overflowY:"auto",padding:11,display:"flex",flexDirection:"column",gap:9}}>
+      {msgs.map((m,i)=><ChatMsg key={i} m={m} client={client}/>)}
+      {loading&&<div style={{display:"flex",gap:7}}><div style={{width:24,height:24,borderRadius:"50%",background:C.teal,display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:800,color:C.navy}}>W</div><div style={{background:C.navyLt,borderRadius:8,padding:"8px 11px",color:C.muted,fontSize:12}}>⚡ Analizando...</div></div>}
+      <div ref={endRef}/>
+    </div>
+    <div style={{padding:"4px 11px",display:"flex",gap:4,flexWrap:"wrap",borderTop:`1px solid ${C.navyLt}22`}}>
+      {cmds.map(c=><button key={c} onClick={()=>send(c)} style={{background:C.navyLt,color:C.muted,border:"none",borderRadius:4,padding:"2px 7px",fontSize:10,cursor:"pointer"}}>{c}</button>)}
+    </div>
+    <div style={{padding:"9px 11px",borderTop:`1px solid ${C.navyLt}`,display:"flex",gap:7}}>
+      <input value={inp} onChange={e=>setInp(e.target.value)} onKeyDown={e=>e.key==="Enter"&&!e.shiftKey&&send()} placeholder="Pregunta, /comando, pide una gráfica..." style={{flex:1,background:C.navy,border:`1px solid ${C.navyLt}`,borderRadius:6,padding:"7px 11px",color:C.white,fontSize:12}}/>
+      <button onClick={()=>send()} disabled={loading} style={{background:loading?C.navyLt:C.teal,color:loading?C.muted:C.navy,border:"none",borderRadius:6,padding:"7px 15px",fontWeight:700,fontSize:12,cursor:loading?"not-allowed":"pointer"}}>→</button>
+    </div>
+  </div>;
+}
+
+// ── HANDOFF SECTION ────────────────────────────────────────────────────────────
+function HandoffSection({clients}){
+  const [sel,setSel]=useState(null);
+  const [brief,setBrief]=useState("");
+  const [loading,setLoading]=useState(false);
+  const [search,setSearch]=useState("");
+  const [tab,setTab]=useState("brief");
+  const won=clients.filter(c=>!c.churn).slice(0,40);
+  const shown=won.filter(c=>c.name.toLowerCase().includes(search.toLowerCase())||c.id.toLowerCase().includes(search.toLowerCase()));
+
+  async function genBrief(client){
+    setSel(client);setBrief("");setLoading(true);setTab("brief");
+    try{
+      const res=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:1000,messages:[{role:"user",content:`Eres asistente de RevOps para Worky (SaaS RRHH México). Genera un briefing ejecutivo de handoff para Customer Success del siguiente cliente.
+
+CLIENTE: ${client.name} (${client.id}) · ${client.industry} · ${client.city}
+Empleados: ${client.employees} · MRR: $${client.mrr.toLocaleString()} · Software anterior: ${client.prevSoftware}
+Módulos: ${client.modules.join(", ")} · Ciclo venta: ${client.salesCycleDays}d · CAC Payback: ${client.cacPayback}m
+Dolores: ${client.mainPain.join("; ")} · NPS: ${client.nps}/10 · Uso: ${client.usage}% · Tickets: ${client.tickets}
+Upsells: ${client.upsells} · Vendedora: ${client.camp} · CS: ${client.csOwner} · Cuadrante: ${client.quadrant}
+
+FORMATO ESTRICTO — PROHIBIDO usar # o **:
+- Usa emojis como encabezado de sección en línea propia
+- Tablas con pipes | Columna | Valor |
+- Listas con "- "
+- Incluye tabla resumen al inicio
+- Español claro y ejecutivo
+
+SECCIONES:
+Tabla resumen
+🎯 Dolores Principales
+⚡ Quick Wins (primeras 2 semanas)
+🚨 Riesgos y Mitigación
+📈 Oportunidades de Expansión (tabla: módulo, probabilidad, MRR potencial)
+📋 Plan 30-60-90 días
+💬 Estilo de comunicación recomendado`}]})});
+      const data=await res.json();
+      setBrief(data.content?.find(b=>b.type==="text")?.text||"Error.");
+    }catch{setBrief("Error al conectar.");}
+    setLoading(false);
+  }
+
+  return <div style={{display:"grid",gridTemplateColumns:"220px 1fr",gap:12,minHeight:560}}>
+    <div style={{background:C.navyMid,borderRadius:10,border:`1px solid ${C.navyLt}`,overflow:"hidden",display:"flex",flexDirection:"column"}}>
+      <div style={{padding:"10px 12px",borderBottom:`1px solid ${C.navyLt}`,background:C.navyLt}}>
+        <div style={{color:C.teal,fontWeight:800,fontSize:11,marginBottom:6}}>CLOSED-WON DEALS</div>
+        <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Buscar..." style={{width:"100%",background:C.navy,border:`1px solid ${C.navyLt}`,borderRadius:5,padding:"4px 8px",color:C.white,fontSize:11,boxSizing:"border-box"}}/>
+      </div>
+      <div style={{overflowY:"auto",flex:1}}>
+        {shown.map(c=><div key={c.id} onClick={()=>genBrief(c)} style={{padding:"8px 12px",background:sel?.id===c.id?C.teal+"18":"transparent",borderLeft:`3px solid ${sel?.id===c.id?C.teal:"transparent"}`,cursor:"pointer",borderBottom:`1px solid ${C.navyLt}22`}}>
+          <div style={{color:C.white,fontWeight:600,fontSize:11,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{c.name.split(" ").slice(0,3).join(" ")}</div>
+          <div style={{display:"flex",gap:4,marginTop:2,flexWrap:"wrap"}}>
+            <Badge color={QUAD[c.quadrant].color} small>{QUAD[c.quadrant].icon} {c.quadrant}</Badge>
+            <span style={{color:C.muted,fontSize:9}}>{c.employees}e·${(c.mrr/1000).toFixed(1)}K</span>
+          </div>
+        </div>)}
+      </div>
+    </div>
+    <div style={{display:"flex",flexDirection:"column",gap:10}}>
+      {!sel&&<div style={{background:C.navyMid,borderRadius:10,border:`1px solid ${C.navyLt}`,flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",minHeight:400}}>
+        <div style={{fontSize:42,marginBottom:8}}>🤝</div>
+        <div style={{fontSize:13,fontWeight:700,color:C.sandDim}}>Selecciona un deal</div>
+        <div style={{fontSize:11,color:C.muted,marginTop:4}}>📄 Brief · 🎬 Video · 🤖 Chatbot + Gráficas + HubSpot + Slack</div>
+      </div>}
+      {sel&&<>
+        <div style={{display:"flex",gap:0,background:C.navyMid,borderRadius:8,padding:3,border:`1px solid ${C.navyLt}`}}>
+          {[{id:"brief",label:"📄 Brief"},{id:"video",label:"🎬 Video"},{id:"chat",label:"🤖 Asistente IA"}].map(t=>(
+            <button key={t.id} onClick={()=>setTab(t.id)} style={{flex:1,background:tab===t.id?C.teal:"transparent",color:tab===t.id?C.navy:C.muted,border:"none",borderRadius:6,padding:"7px 0",fontWeight:700,fontSize:11,cursor:"pointer",transition:"all 0.2s"}}>{t.label}</button>
+          ))}
+        </div>
+        {tab==="brief"&&<div style={{background:C.navyMid,borderRadius:10,border:`1px solid ${C.navyLt}`,padding:16,flex:1,overflowY:"auto",maxHeight:520}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:10,flexWrap:"wrap",gap:7}}>
+            <div><div style={{color:C.teal,fontWeight:800,fontSize:13}}>HANDOFF BRIEF · {sel.name.split(" ").slice(0,3).join(" ")}</div><div style={{color:C.muted,fontSize:11,marginTop:2}}>{sel.camp} → {sel.csOwner} · {new Date().toLocaleDateString("es-MX")}</div></div>
+            <Badge color={QUAD[sel.quadrant].color}>{QUAD[sel.quadrant].icon} {sel.quadrant}</Badge>
+          </div>
+          {loading&&<div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",height:220}}><div style={{color:C.teal,fontSize:32,marginBottom:8}}>⚡</div><div style={{color:C.white,fontWeight:700}}>Generando brief...</div></div>}
+          {brief&&!loading&&<RichText text={brief}/>}
+        </div>}
+        {tab==="video"&&(loading?<div style={{background:C.navyMid,borderRadius:10,border:`1px solid ${C.navyLt}`,padding:40,display:"flex",flexDirection:"column",alignItems:"center"}}><div style={{color:C.teal,fontSize:32}}>⚡</div><div style={{color:C.white,fontWeight:700,marginTop:8}}>Esperando brief...</div></div>:<VideoBrief client={sel} brief={brief}/>)}
+        {tab==="chat"&&<ChatbotPanel client={sel} brief={brief} clients={clients}/>}
+      </>}
+    </div>
+  </div>;
+}
+
+// ── MATRIX SECTION ────────────────────────────────────────────────────────────
+function MatrixSection({clients}){
+  const [bf,setBf]=useState("Todos");
+  const [qf,setQf]=useState("Todos");
+  const [indF,setIndF]=useState("Todas");
+  const [prodF,setProdF]=useState("Todos");
+  const [showAssumptions,setShowAssumptions]=useState(false);
+  const [selQ,setSelQ]=useState(null);
+  const [filtersOpen,setFiltersOpen]=useState(false);
+  const buckets=["Todos","0-100","100-500","500+"];
+  const allIndustries=["Todas",...Array.from(new Set(clients.map(c=>c.industry))).sort()];
+  const allProducts=["Todos","Worky","Worky + Nómina","Solo Nómina"];
+  const filtered=clients.filter(c=>
+    (bf==="Todos"||c.empBucket===bf)&&
+    (qf==="Todos"||c.quadrant===qf)&&
+    (indF==="Todas"||c.industry===indF)&&
+    (prodF==="Todos"||c.product===prodF)
+  ).sort((a,b)=>b.mrr-a.mrr);
+  const stats=Object.fromEntries(Object.keys(QUAD).map(k=>[k,filtered.filter(c=>c.quadrant===k).length]));
+  const totalMRR=filtered.filter(c=>!c.churn).reduce((s,c)=>s+c.mrr,0);
+  const atRiskMRR=filtered.filter(c=>c.quadrant==="En Riesgo").reduce((s,c)=>s+c.mrr,0);
+  const avgNPS=(filtered.reduce((s,c)=>s+c.nps,0)/(filtered.length||1)).toFixed(1);
+  const activeFilters=[bf!=="Todos",qf!=="Todos",indF!=="Todas",prodF!=="Todos"].filter(Boolean).length;
+
+  // Build active filter chips for summary bar
+  const chips=[];
+  if(bf!=="Todos")chips.push({label:bf+" emp",clear:()=>setBf("Todos"),color:C.teal});
+  if(prodF!=="Todos")chips.push({label:prodF,clear:()=>setProdF("Todos"),color:C.purple});
+  if(indF!=="Todas")chips.push({label:indF,clear:()=>setIndF("Todas"),color:C.amber});
+  if(qf!=="Todos")chips.push({label:QUAD[qf]?.icon+" "+qf,clear:()=>setQf("Todos"),color:QUAD[qf]?.color||C.teal});
+
+  return <div>
+    {showAssumptions&&<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.8)",zIndex:200,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+      <div style={{background:C.navyMid,border:`2px solid ${C.teal}`,borderRadius:14,padding:24,maxWidth:680,width:"100%",maxHeight:"85vh",overflowY:"auto"}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
+          <div style={{color:C.teal,fontWeight:800,fontSize:15}}>📖 Assumptions de Cuadrantes</div>
+          <button onClick={()=>{setShowAssumptions(false);setSelQ(null);}} style={{background:"none",border:"none",color:C.muted,cursor:"pointer",fontSize:18}}>✕</button>
+        </div>
+        <div style={{display:"flex",gap:7,marginBottom:16,flexWrap:"wrap"}}>
+          {Object.keys(QUAD_ASSUMPTIONS).map(k=><button key={k} onClick={()=>setSelQ(selQ===k?null:k)} style={{background:selQ===k?QUAD_ASSUMPTIONS[k].color:C.navyLt,color:selQ===k?C.navy:C.muted,border:`1px solid ${selQ===k?QUAD_ASSUMPTIONS[k].color:C.navyLt}`,borderRadius:6,padding:"5px 13px",fontWeight:700,fontSize:12,cursor:"pointer"}}>
+            {QUAD_ASSUMPTIONS[k].icon} {QUAD_ASSUMPTIONS[k].title}
+          </button>)}
+        </div>
+        {(selQ?[selQ]:Object.keys(QUAD_ASSUMPTIONS)).map(k=>{
+          const qa=QUAD_ASSUMPTIONS[k];
+          return <div key={k} style={{background:C.navy,borderRadius:10,border:`1px solid ${qa.color}44`,padding:16,marginBottom:12}}>
+            <div style={{color:qa.color,fontWeight:800,fontSize:13,marginBottom:10}}>{qa.icon} {qa.title}</div>
+            {qa.rules.map((r,i)=><div key={i} style={{display:"flex",gap:10,alignItems:"flex-start",marginBottom:8,paddingBottom:8,borderBottom:i<qa.rules.length-1?`1px solid ${C.navyLt}`:"none"}}>
+              <span style={{fontSize:14,flexShrink:0}}>{r.met}</span>
+              <div>
+                <div style={{color:C.white,fontWeight:700,fontSize:12}}>{r.label}</div>
+                <div style={{color:C.muted,fontSize:11,marginTop:2}}>{r.detail}</div>
+              </div>
+            </div>)}
+            <div style={{background:qa.color+"11",borderRadius:6,padding:"8px 12px",marginTop:6}}>
+              <div style={{color:C.amber,fontWeight:700,fontSize:10,marginBottom:3}}>⚠ RIESGO DE TRANSICIÓN</div>
+              <div style={{color:C.sandDim,fontSize:11}}>{qa.risk}</div>
+            </div>
+            <div style={{background:C.navyLt,borderRadius:6,padding:"8px 12px",marginTop:6}}>
+              <div style={{color:C.teal,fontWeight:700,fontSize:10,marginBottom:3}}>🎯 ACCIÓN RECOMENDADA</div>
+              <div style={{color:C.sandDim,fontSize:11}}>{qa.action}</div>
+            </div>
+          </div>;
+        })}
+      </div>
+    </div>}
+
+    {/* ── COLLAPSIBLE FILTER BAR ── */}
+    <div style={{background:C.navyMid,borderRadius:10,border:`1px solid ${filtersOpen?C.teal:C.navyLt}`,marginBottom:14,overflow:"hidden",transition:"border-color 0.2s"}}>
+      {/* Header row — always visible */}
+      <div onClick={()=>setFiltersOpen(o=>!o)} style={{padding:"10px 14px",cursor:"pointer",display:"flex",justifyContent:"space-between",alignItems:"center",userSelect:"none"}}>
+        <div style={{display:"flex",alignItems:"center",gap:8}}>
+          <span style={{color:filtersOpen?C.teal:C.sandDim,fontWeight:800,fontSize:11}}>🔍 FILTROS</span>
+          {activeFilters===0
+            ? <span style={{color:C.muted,fontSize:10}}>Sin filtros activos</span>
+            : <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
+                {chips.map((ch,i)=><span key={i} onClick={e=>{e.stopPropagation();ch.clear();}} style={{background:ch.color+"22",color:ch.color,border:`1px solid ${ch.color}44`,borderRadius:10,padding:"1px 8px",fontSize:10,fontWeight:700,cursor:"pointer"}} title="Clic para quitar">
+                  {ch.label} ✕
+                </span>)}
+              </div>
+          }
+        </div>
+        <div style={{display:"flex",alignItems:"center",gap:8}}>
+          {activeFilters>0&&<span style={{background:C.teal+"22",color:C.teal,borderRadius:10,padding:"1px 8px",fontSize:10,fontWeight:700}}>{filtered.length} resultados</span>}
+          <span style={{color:C.muted,fontSize:12,transform:filtersOpen?"rotate(180deg)":"rotate(0deg)",transition:"transform 0.2s",display:"inline-block"}}>▼</span>
+        </div>
+      </div>
+      {/* Expandable filter body */}
+      {filtersOpen&&<div style={{borderTop:`1px solid ${C.navyLt}`,padding:"12px 14px",display:"flex",flexDirection:"column",gap:10}}>
+        <div style={{display:"grid",gridTemplateColumns:"70px 1fr",gap:6,alignItems:"center"}}>
+          <span style={{color:C.muted,fontSize:10,fontWeight:700}}>TAMAÑO</span>
+          <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
+            {buckets.map(b=><button key={b} onClick={()=>setBf(b)} style={{background:bf===b?C.teal:C.navy,color:bf===b?C.navy:C.sandDim,border:`1px solid ${bf===b?C.teal:C.navyLt}`,borderRadius:5,padding:"4px 12px",fontSize:11,fontWeight:700,cursor:"pointer"}}>{b} emp</button>)}
+          </div>
+        </div>
+        <div style={{display:"grid",gridTemplateColumns:"70px 1fr",gap:6,alignItems:"center"}}>
+          <span style={{color:C.muted,fontSize:10,fontWeight:700}}>PRODUCTO</span>
+          <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
+            {allProducts.map(p=><button key={p} onClick={()=>setProdF(p)} style={{background:prodF===p?C.purple:C.navy,color:prodF===p?C.white:C.sandDim,border:`1px solid ${prodF===p?C.purple:C.navyLt}`,borderRadius:5,padding:"4px 12px",fontSize:11,fontWeight:700,cursor:"pointer"}}>{p}</button>)}
+          </div>
+        </div>
+        <div style={{display:"grid",gridTemplateColumns:"70px 1fr",gap:6,alignItems:"start"}}>
+          <span style={{color:C.muted,fontSize:10,fontWeight:700,paddingTop:4}}>INDUSTRIA</span>
+          <div style={{display:"flex",gap:4,flexWrap:"wrap"}}>
+            {allIndustries.map(ind=><button key={ind} onClick={()=>setIndF(ind)} style={{background:indF===ind?C.amber:C.navy,color:indF===ind?C.navy:C.sandDim,border:`1px solid ${indF===ind?C.amber:C.navyLt}`,borderRadius:5,padding:"3px 10px",fontSize:10,fontWeight:indF===ind?700:400,cursor:"pointer"}}>{ind}</button>)}
+          </div>
+        </div>
+        <div style={{display:"grid",gridTemplateColumns:"70px 1fr",gap:6,alignItems:"center"}}>
+          <span style={{color:C.muted,fontSize:10,fontWeight:700}}>CUADRANTE</span>
+          <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
+            {["Todos",...Object.keys(QUAD)].map(k=>{const q=QUAD[k];return <button key={k} onClick={()=>setQf(k==="Todos"?"Todos":k)} style={{background:qf===k?(q?.color||C.teal):C.navy,color:qf===k?C.navy:C.sandDim,border:`1px solid ${qf===k?(q?.color||C.teal):C.navyLt}`,borderRadius:5,padding:"4px 12px",fontSize:11,fontWeight:700,cursor:"pointer"}}>{q?q.icon+" ":""}{k}</button>;})}
+          </div>
+        </div>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",paddingTop:4,borderTop:`1px solid ${C.navyLt}`}}>
+          <button onClick={()=>setShowAssumptions(true)} style={{background:"none",color:C.purple,border:"none",fontSize:10,fontWeight:700,cursor:"pointer"}}>📖 Ver Assumptions →</button>
+          {activeFilters>0&&<button onClick={()=>{setBf("Todos");setQf("Todos");setIndF("Todas");setProdF("Todos");}} style={{background:C.red+"22",color:C.red,border:`1px solid ${C.red}33`,borderRadius:5,padding:"3px 12px",fontSize:10,fontWeight:700,cursor:"pointer"}}>✕ Limpiar todos</button>}
+        </div>
+      </div>}
+    </div>
+    <div style={{display:"flex",gap:10,marginBottom:16,flexWrap:"wrap"}}>
+      <StatCard icon="💰" label="MRR Activo" value={fmtMXN(totalMRR)} color={C.teal}/>
+      <StatCard icon="🚨" label="MRR en Riesgo" value={fmtMXN(atRiskMRR)} color={C.amber}/>
+      <StatCard icon="⭐" label="NPS Promedio" value={avgNPS} color={Number(avgNPS)>=7?C.green:C.amber}/>
+      <StatCard icon="👥" label="Clientes" value={filtered.length} color={C.purple}/>
+    </div>
+    {/* ── VISUAL MATRIX 2×2 ── */}
+    <div style={{marginBottom:16}}>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}>
+        <span style={{color:C.muted,fontSize:10,fontWeight:700,letterSpacing:"0.06em"}}>REVENUE INTELLIGENCE MATRIX — {filtered.length} clientes</span>
+        <span style={{color:C.muted,fontSize:9}}>Eje X: Potencial expansión · Eje Y: Salud del cliente</span>
+      </div>
+      {/* Axis labels + grid */}
+      <div style={{display:"grid",gridTemplateColumns:"28px 1fr 1fr",gridTemplateRows:"1fr 1fr 22px",gap:4,height:280}}>
+        {/* Y-axis label */}
+        <div style={{gridRow:"1/3",gridColumn:"1/2",display:"flex",alignItems:"center",justifyContent:"center"}}>
+          <span style={{color:C.muted,fontSize:9,fontWeight:700,writingMode:"vertical-rl",transform:"rotate(180deg)",letterSpacing:"0.1em"}}>↑ MÁS SALUDABLE</span>
+        </div>
+        {/* CHAMPION — top left (high health, high expansion) */}
+        {[
+          {key:"Maduro",row:1,col:2},
+          {key:"Champion",row:1,col:3},
+          {key:"Perdido",row:2,col:2},
+          {key:"En Riesgo",row:2,col:3},
+        ].map(({key,row,col})=>{
+          const q=QUAD[key];
+          const isActive=qf===key;
+          const pct=filtered.length?((stats[key]/filtered.length)*100).toFixed(0):0;
+          const cellMRR=filtered.filter(c=>c.quadrant===key&&!c.churn).reduce((s,c)=>s+c.mrr,0);
+          return <div key={key} onClick={()=>setQf(isActive?"Todos":key)}
+            style={{
+              gridRow:`${row}/${row+1}`,gridColumn:`${col}/${col+1}`,
+              background:isActive?q.color+"28":C.navyMid,
+              border:`2px solid ${isActive?q.color:C.navyLt}`,
+              borderRadius:10,padding:"10px 12px",cursor:"pointer",
+              position:"relative",overflow:"hidden",
+              transition:"all 0.2s",
+            }}>
+
+            {/* Top stripe */}
+            <div style={{position:"absolute",top:0,left:0,right:0,height:3,background:q.color,borderRadius:"8px 8px 0 0"}}/>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:6}}>
+              <div>
+                <span style={{fontSize:16}}>{q.icon}</span>
+                <div style={{color:q.color,fontWeight:800,fontSize:12,marginTop:2}}>{q.label}</div>
+              </div>
+              <div style={{textAlign:"right"}}>
+                <div style={{color:q.color,fontSize:26,fontWeight:900,lineHeight:1}}>{stats[key]}</div>
+                <div style={{color:C.muted,fontSize:9}}>{pct}%</div>
+              </div>
+            </div>
+            <div style={{color:C.muted,fontSize:9,marginBottom:6}}>{q.desc}</div>
+            {cellMRR>0&&<div style={{color:C.teal,fontSize:10,fontWeight:700,marginBottom:2}}>MRR activo: {fmtMXN(cellMRR)}</div>}
+            {key==="Perdido"&&<div style={{color:C.red,fontSize:10,fontWeight:700,marginBottom:6}}>⚠ MRR perdido: {fmtMXN(filtered.filter(c=>c.quadrant==="Perdido").reduce((s,c)=>s+c.mrr,0))}</div>}
+  
+          </div>;
+        })}
+        {/* X-axis bottom labels */}
+        <div style={{gridRow:"3/4",gridColumn:"2/3",display:"flex",alignItems:"center",justifyContent:"center"}}>
+          <span style={{color:C.muted,fontSize:9,fontWeight:700,letterSpacing:"0.06em"}}>← BAJO POTENCIAL</span>
+        </div>
+        <div style={{gridRow:"3/4",gridColumn:"3/4",display:"flex",alignItems:"center",justifyContent:"center"}}>
+          <span style={{color:C.muted,fontSize:9,fontWeight:700,letterSpacing:"0.06em"}}>ALTO POTENCIAL →</span>
+        </div>
+      </div>
+    </div>
+    <ClientTable clients={filtered}/>
+  </div>;
+}
+
+function getAlerts(c){
+  const a=[];
+  if(c.usage<40)a.push({icon:"⬇️",label:"Uso crítico",color:C.red});
+  if(c.nps<6)a.push({icon:"💔",label:`NPS bajo (${c.nps}/10)`,color:C.red});
+  if(c.tickets>40)a.push({icon:"🎫",label:`${c.tickets} tickets abiertos`,color:C.amber});
+  if(c.lastActivity>30)a.push({icon:"😴",label:`Sin actividad ${c.lastActivity}d`,color:C.amber});
+  if(c.upsells>=2&&c.usage>70)a.push({icon:"💡",label:"Oportunidad upsell",color:C.teal});
+  return a;
+}
+
+function ClientTable({clients}){
+  const [page,setPage]=useState(0);const ps=8;
+  // already sorted by MRR from MatrixSection filter
+  const sl=clients.slice(page*ps,(page+1)*ps);
+  return <div style={{background:C.navyMid,borderRadius:10,overflow:"hidden",border:`1px solid ${C.navyLt}`}}>
+    <div style={{overflowX:"auto"}}><table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
+      <thead><tr style={{background:C.navyLt}}>{["ID","Empresa","Industria","Producto","MRR ↓","NPS","Uso","Cuadrante","CS Owner","Alertas"].map(h=><th key={h} style={{padding:"8px 9px",textAlign:"left",color:C.muted,fontWeight:700,fontSize:10,whiteSpace:"nowrap"}}>{h}</th>)}</tr></thead>
+      <tbody>{sl.map((c,i)=>{
+        const q=QUAD[c.quadrant];
+        const alerts=getAlerts(c);
+        return <tr key={c.id} style={{background:i%2===0?C.navyMid:C.navy,borderBottom:`1px solid ${C.navyLt}22`}}>
+          <td style={{padding:"6px 9px",color:C.muted,fontFamily:"monospace",fontSize:10}}>{c.id}</td>
+          <td style={{padding:"6px 9px",color:C.white,fontWeight:600,maxWidth:130,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{c.name}</td>
+          <td style={{padding:"6px 9px",color:C.sandDim,fontSize:10}}>{c.industry}</td>
+          <td style={{padding:"6px 9px"}}><span style={{background:C.purple+"18",color:C.purple,border:`1px solid ${C.purple}33`,borderRadius:4,padding:"2px 6px",fontSize:9,fontWeight:700,whiteSpace:"nowrap"}}>{c.product}</span></td>
+          <td style={{padding:"6px 9px",color:C.teal,fontWeight:700}}>{fmtMXN(c.mrr)}</td>
+          <td style={{padding:"6px 9px"}}><span style={{color:c.nps>=8?C.green:c.nps>=6?C.amber:C.red,fontWeight:700}}>{c.nps}</span></td>
+          <td style={{padding:"6px 9px"}}><div style={{display:"flex",alignItems:"center",gap:5}}><MiniBar value={c.usage} max={100} color={c.usage>70?C.green:c.usage>45?C.amber:C.red}/><span style={{color:C.sandDim,fontSize:10,minWidth:26}}>{c.usage}%</span></div></td>
+          <td style={{padding:"6px 9px"}}><Badge color={q.color} small>{q.icon} {c.quadrant}</Badge></td>
+          <td style={{padding:"6px 9px",color:C.sandDim,fontSize:11}}>{c.csOwner}</td>
+          <td style={{padding:"6px 9px",minWidth:160}}>
+            {alerts.length===0
+              ?<span style={{color:C.green,fontSize:10}}>✅ Sin alertas</span>
+              :<div style={{display:"flex",flexDirection:"column",gap:2}}>
+                {alerts.map((a,ai)=><span key={ai} style={{display:"flex",alignItems:"center",gap:4,color:a.color,fontSize:9,fontWeight:600}}><span>{a.icon}</span><span>{a.label}</span></span>)}
+              </div>
+            }
+          </td>
+        </tr>;
+      })}</tbody>
+    </table></div>
+    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"8px 12px",borderTop:`1px solid ${C.navyLt}`}}>
+      <span style={{color:C.muted,fontSize:11}}>{clients.length} clientes · ordenados por MRR · p.{page+1}/{Math.ceil(clients.length/ps)}</span>
+      <div style={{display:"flex",gap:4}}>
+        <button disabled={page===0} onClick={()=>setPage(p=>p-1)} style={{background:C.navyLt,color:C.sandDim,border:"none",borderRadius:4,padding:"3px 9px",cursor:page===0?"not-allowed":"pointer",opacity:page===0?0.4:1,fontSize:12}}>←</button>
+        <button disabled={(page+1)*ps>=clients.length} onClick={()=>setPage(p=>p+1)} style={{background:C.navyLt,color:C.sandDim,border:"none",borderRadius:4,padding:"3px 9px",cursor:(page+1)*ps>=clients.length?"not-allowed":"pointer",opacity:(page+1)*ps>=clients.length?0.4:1,fontSize:12}}>→</button>
+      </div>
+    </div>
+  </div>;
+}
+
+// ── PIPELINE FUNNEL SECTION ────────────────────────────────────────────────────
+function PipelineFunnelSection({pipeline}){
+  const [selRep,setSelRep]=useState("Total");
+  const [selStage,setSelStage]=useState(null);
+  const [selDeal,setSelDeal]=useState(null);
+  const [editVals,setEditVals]=useState({});
+  const [saved,setSaved]=useState(false);
+  const [showWinPat,setShowWinPat]=useState(false);
+
+  const stages=["SQL","Demo","Por Cerrar"];
+  const stageColor={SQL:C.teal,Demo:C.purple,"Por Cerrar":C.green};
+
+  const isTotal=selRep==="Total";
+  const repDeals=isTotal?pipeline:pipeline.filter(d=>d.camp===selRep);
+  const byStage=Object.fromEntries(stages.map(s=>[s,repDeals.filter(d=>d.stage===s)]));
+  const maxCount=Math.max(...stages.map(s=>byStage[s].length),1);
+
+  // Closed-won per rep (from ALL_CLIENTS)
+  const closedDeals=isTotal?ALL_CLIENTS.filter(c=>!c.churn):ALL_CLIENTS.filter(c=>c.camp===selRep&&!c.churn);
+  // Win patterns
+  const topIndustry=[...new Set(closedDeals.map(c=>c.industry))].map(ind=>({ind,cnt:closedDeals.filter(c=>c.industry===ind).length})).sort((a,b)=>b.cnt-a.cnt).slice(0,3);
+  const avgCycle=closedDeals.length?(closedDeals.reduce((s,c)=>s+c.salesCycleDays,0)/closedDeals.length).toFixed(0):0;
+  const topSeg=[...new Set(closedDeals.map(c=>c.empBucket))].map(s=>({s,cnt:closedDeals.filter(c=>c.empBucket===s).length})).sort((a,b)=>b.cnt-a.cnt);
+  const avgMRR=closedDeals.length?(closedDeals.reduce((s,c)=>s+c.mrr,0)/closedDeals.length/1000).toFixed(1):0;
+  const topMods=[...ALL_MODULES].map(m=>({m,cnt:closedDeals.filter(c=>c.modules.includes(m)).length})).sort((a,b)=>b.cnt-a.cnt).slice(0,3);
+
+  const stageDeals=selStage?byStage[selStage]:[];
+
+  function saveField(dealId,field,val){
+    setSaved(false);
+    setTimeout(()=>{setSaved(true);setTimeout(()=>setSaved(false),2200);},700);
+  }
+
+  return <div>
+    {/* Rep selector */}
+    <div style={{display:"flex",gap:6,marginBottom:14,flexWrap:"wrap",alignItems:"center"}}>
+      <span style={{color:C.muted,fontSize:11}}>VER:</span>
+      <button onClick={()=>{setSelRep("Total");setSelStage(null);setSelDeal(null);setShowWinPat(false);}} style={{background:selRep==="Total"?C.green:C.navyLt,color:selRep==="Total"?C.navy:C.sandDim,border:`2px solid ${selRep==="Total"?C.green:C.navyLt}`,borderRadius:6,padding:"5px 14px",fontSize:12,fontWeight:800,cursor:"pointer"}}>📊 Total Pipeline</button>
+      <span style={{color:C.navyLt,fontSize:14}}>|</span>
+      <span style={{color:C.muted,fontSize:11}}>Por vendedora:</span>
+      {campNames.map(n=><button key={n} onClick={()=>{setSelRep(n);setSelStage(null);setSelDeal(null);}} style={{background:selRep===n?C.teal:C.navyLt,color:selRep===n?C.navy:C.sandDim,border:"none",borderRadius:6,padding:"5px 12px",fontSize:12,fontWeight:700,cursor:"pointer"}}>{n.split(" ")[0]}</button>)}
+    </div>
+
+    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+      {/* LEFT: Funnel */}
+      <div>
+        <div style={{color:C.white,fontWeight:800,fontSize:13,marginBottom:10}}>{isTotal?"📊 Pipeline Total — Todas las vendedoras":selRep+" — Pipeline Activo"}</div>
+        <div style={{display:"flex",flexDirection:"column",gap:8}}>
+          {stages.map((stage,si)=>{
+            const deals=byStage[stage];
+            const totalMRR=deals.reduce((s,d)=>s+d.mrr,0);
+            const avgFill=deals.length?Math.round(deals.reduce((s,d)=>s+d.fillPct,0)/deals.length):0;
+            const fillColor=avgFill>=80?C.green:avgFill>=60?C.amber:C.red;
+            const isActive=selStage===stage;
+            // Funnel width: narrows per stage
+            const funnelW=[100,78,60][si];
+            return <div key={stage} onClick={()=>{setSelStage(isActive?null:stage);setSelDeal(null);}} style={{cursor:"pointer"}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
+                <div style={{display:"flex",alignItems:"center",gap:7}}>
+                  <span style={{color:stageColor[stage],fontWeight:800,fontSize:12}}>{stage}</span>
+                  <span style={{background:stageColor[stage]+"22",color:stageColor[stage],borderRadius:10,padding:"1px 8px",fontSize:11,fontWeight:700}}>{deals.length} deals</span>
+                </div>
+                <div style={{display:"flex",alignItems:"center",gap:8}}>
+                  <span style={{color:C.teal,fontSize:11,fontWeight:700}}>{fmtMXN(totalMRR)} MRR pot.</span>
+                  <span style={{background:fillColor+"22",color:fillColor,borderRadius:4,padding:"1px 7px",fontSize:10,fontWeight:700}}>CRM {avgFill}%</span>
+                </div>
+              </div>
+              <div style={{display:"flex",justifyContent:"center"}}>
+                <div style={{width:`${funnelW}%`,background:isActive?stageColor[stage]+"44":stageColor[stage]+"22",border:`2px solid ${isActive?stageColor[stage]:stageColor[stage]+"55"}`,borderRadius:6,padding:"10px 0",textAlign:"center",transition:"all 0.2s",position:"relative"}}>
+                  {/* CRM fill bar */}
+                  <div style={{position:"absolute",bottom:0,left:0,width:`${avgFill}%`,height:3,background:fillColor,borderRadius:"0 0 4px 4px",transition:"width 0.5s"}}/>
+                  <span style={{color:isActive?stageColor[stage]:stageColor[stage],fontSize:11,fontWeight:700,opacity:0.8}}>▼</span>
+                </div>
+              </div>
+            </div>;
+          })}
+          {/* Total pipeline */}
+          <div style={{background:C.navyMid,borderRadius:7,padding:"9px 12px",border:`1px solid ${C.navyLt}`,marginTop:4}}>
+            <div style={{display:"flex",justifyContent:"space-between"}}>
+              <span style={{color:C.muted,fontSize:11}}>Total pipeline activo</span>
+              <span style={{color:C.teal,fontWeight:800,fontSize:12}}>{fmtMXN(repDeals.reduce((s,d)=>s+d.mrr,0))}</span>
+            </div>
+            <div style={{color:C.muted,fontSize:10,marginTop:2}}>{repDeals.length} deals · CRM avg {repDeals.length?Math.round(repDeals.reduce((s,d)=>s+d.fillPct,0)/repDeals.length):0}%</div>
+          </div>
+        </div>
+
+        {/* Win Patterns button */}
+        {!isTotal&&<button onClick={()=>setShowWinPat(!showWinPat)} style={{marginTop:10,width:"100%",background:showWinPat?C.amber+"22":C.navyLt,color:showWinPat?C.amber:C.muted,border:`1px solid ${showWinPat?C.amber+"44":C.navyLt}`,borderRadius:7,padding:"7px 0",fontWeight:700,fontSize:11,cursor:"pointer"}}>
+          {showWinPat?"▲ Ocultar":"✨ Ver Win Patterns de"} {selRep.split(" ")[0]} ({closedDeals.length} cierres)
+        </button>}
+        {showWinPat&&<div style={{background:C.navyMid,borderRadius:8,border:`1px solid ${C.amber}33`,padding:12,marginTop:6}}>
+          <div style={{color:C.amber,fontWeight:800,fontSize:11,marginBottom:8}}>✨ PATRONES DE CIERRE — {selRep.split(" ")[0].toUpperCase()}</div>
+          <div style={{display:"flex",flexDirection:"column",gap:6}}>
+            <div style={{background:C.navy,borderRadius:6,padding:"8px 10px"}}>
+              <div style={{color:C.muted,fontSize:9,fontWeight:700,marginBottom:3}}>INDUSTRIAS MÁS CERRADAS</div>
+              {topIndustry.map(({ind,cnt})=><div key={ind} style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                <span style={{color:C.sandDim,fontSize:11}}>{ind}</span>
+                <span style={{color:C.amber,fontWeight:700,fontSize:11}}>{cnt} cierres</span>
+              </div>)}
+            </div>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6}}>
+              <div style={{background:C.navy,borderRadius:6,padding:"8px 10px"}}>
+                <div style={{color:C.muted,fontSize:9,fontWeight:700,marginBottom:3}}>CICLO PROM.</div>
+                <div style={{color:C.teal,fontWeight:800,fontSize:16}}>{avgCycle}d</div>
+              </div>
+              <div style={{background:C.navy,borderRadius:6,padding:"8px 10px"}}>
+                <div style={{color:C.muted,fontSize:9,fontWeight:700,marginBottom:3}}>MRR PROM.</div>
+                <div style={{color:C.green,fontWeight:800,fontSize:16}}>${avgMRR}K</div>
+              </div>
+            </div>
+            <div style={{background:C.navy,borderRadius:6,padding:"8px 10px"}}>
+              <div style={{color:C.muted,fontSize:9,fontWeight:700,marginBottom:3}}>MÓDULOS EN CIERRES EXITOSOS</div>
+              {topMods.map(({m,cnt})=><div key={m} style={{display:"flex",justifyContent:"space-between"}}>
+                <span style={{color:C.sandDim,fontSize:11}}>{m}</span>
+                <span style={{color:C.purple,fontWeight:700,fontSize:11}}>{cnt} deals</span>
+              </div>)}
+            </div>
+            <div style={{background:C.navy,borderRadius:6,padding:"8px 10px"}}>
+              <div style={{color:C.muted,fontSize:9,fontWeight:700,marginBottom:3}}>SEGMENTO CON MAYOR WIN RATE</div>
+              {topSeg.map(({s,cnt})=><div key={s} style={{display:"flex",justifyContent:"space-between"}}>
+                <span style={{color:C.sandDim,fontSize:11}}>{s} empleados</span>
+                <span style={{color:C.teal,fontWeight:700,fontSize:11}}>{cnt}</span>
+              </div>)}
+            </div>
+            {/* Matching deals from FULL pipeline */}
+            {(()=>{
+              const matchIndustries=new Set(topIndustry.map(t=>t.ind));
+              const topSegBucket=topSeg[0]?.s;
+              const matches=pipeline.filter(d=>
+                matchIndustries.has(d.industry)||(topSegBucket&&d.seg===topSegBucket)
+              ).sort((a,b)=>b.mrr-a.mrr);
+              if(!matches.length)return null;
+              return <div style={{background:C.navy,borderRadius:6,padding:"8px 10px",border:`1px solid ${C.teal}33`}}>
+                <div style={{color:C.teal,fontSize:9,fontWeight:700,marginBottom:6}}>🎯 DEALS DEL PIPELINE TOTAL QUE HACEN MATCH CON SU PERFIL ({matches.length})</div>
+                <div style={{display:"flex",flexDirection:"column",gap:4,maxHeight:200,overflowY:"auto"}}>
+                  {matches.map(d=><div key={d.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"4px 6px",background:d.camp===selRep?C.teal+"18":C.navyMid,borderRadius:4,border:`1px solid ${d.camp===selRep?C.teal+"44":C.navyLt+"44"}`}}>
+                    <div>
+                      <div style={{color:C.white,fontSize:10,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",maxWidth:140}}>{d.name}</div>
+                      <div style={{color:C.muted,fontSize:9}}>{d.industry} · {d.seg}e · {d.stage}</div>
+                    </div>
+                    <div style={{textAlign:"right",flexShrink:0}}>
+                      <div style={{color:C.teal,fontSize:10,fontWeight:700}}>{fmtMXN(d.mrr)}</div>
+                      <div style={{color:d.camp===selRep?C.teal:C.muted,fontSize:9}}>{d.camp===selRep?"← suyo":d.camp.split(" ")[0]}</div>
+                    </div>
+                  </div>)}
+                </div>
+              </div>;
+            })()}
+          </div>
+        </div>}
+      </div>
+
+      {/* RIGHT: Deal drill-down */}
+      <div>
+        {!selStage&&<div style={{background:C.navyMid,borderRadius:10,border:`1px solid ${C.navyLt}`,height:"100%",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",minHeight:280}}>
+          <div style={{fontSize:36,marginBottom:8}}>👆</div>
+          <div style={{color:C.sandDim,fontSize:12,fontWeight:700}}>Clic en una etapa del funnel</div>
+          <div style={{color:C.muted,fontSize:11,marginTop:4}}>Ver deals + propiedades faltantes</div>
+        </div>}
+        {selStage&&<div style={{background:C.navyMid,borderRadius:10,border:`2px solid ${stageColor[selStage]}44`,overflow:"hidden"}}>
+          <div style={{padding:"9px 12px",background:stageColor[selStage]+"18",borderBottom:`1px solid ${stageColor[selStage]}33`,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+            <div style={{color:stageColor[selStage],fontWeight:800,fontSize:12}}>{selStage} · {stageDeals.length} deals</div>
+            <button onClick={()=>{setSelStage(null);setSelDeal(null);}} style={{background:"none",border:"none",color:C.muted,cursor:"pointer",fontSize:14}}>✕</button>
+          </div>
+          <div style={{maxHeight:380,overflowY:"auto"}}>
+            {stageDeals.map(deal=>{
+              const missing=Object.entries(deal.fields).filter(([,v])=>!v).map(([k])=>k);
+              const isSelDeal=selDeal?.id===deal.id;
+              return <div key={deal.id} style={{borderBottom:`1px solid ${C.navyLt}22`}}>
+                <div onClick={()=>setSelDeal(isSelDeal?null:deal)} style={{padding:"8px 12px",cursor:"pointer",background:isSelDeal?C.navyLt:"transparent"}}>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                    <div>
+                      <div style={{color:C.white,fontWeight:700,fontSize:11,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",maxWidth:180}}>{deal.name}</div>
+                      <div style={{color:C.muted,fontSize:10}}>{deal.industry} · {deal.employees}e · {fmtMXN(deal.mrr)}</div>
+                    </div>
+                    <div style={{display:"flex",gap:5,alignItems:"center"}}>
+                      <span style={{color:deal.fillPct>=80?C.green:deal.fillPct>=60?C.amber:C.red,fontSize:10,fontWeight:700}}>{deal.fillPct}% CRM</span>
+                      <span style={{color:C.muted,fontSize:10}}>{missing.length>0?`${missing.length} faltan`:"✅"}</span>
+                    </div>
+                  </div>
+                  {missing.length>0&&<div style={{display:"flex",gap:4,marginTop:4,flexWrap:"wrap"}}>
+                    {missing.slice(0,4).map(f=><span key={f} style={{background:C.red+"18",color:C.red,border:`1px solid ${C.red}33`,borderRadius:3,padding:"1px 5px",fontSize:9,fontWeight:700}}>{f}</span>)}
+                    {missing.length>4&&<span style={{color:C.muted,fontSize:9}}>+{missing.length-4} más</span>}
+                  </div>}
+                </div>
+                 {isSelDeal&&<div style={{background:C.navy,padding:"10px 12px",borderTop:`1px solid ${C.navyLt}`}}>
+                   <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+                     <div style={{color:C.teal,fontWeight:700,fontSize:10}}>✏️ Completar campos — sin escritura manual</div>
+                     {Object.values(deal.fields).filter(v=>!v).length>0&&<span style={{background:C.red+"22",color:C.red,fontSize:9,fontWeight:700,borderRadius:4,padding:"2px 7px"}}>{Object.values(deal.fields).filter(v=>!v).length} campos faltantes</span>}
+                   </div>
+                   <div style={{display:"flex",flexDirection:"column",gap:5}}>
+                     {Object.entries(deal.fields).map(([field,val])=>{
+                       const key=`${deal.id}-${field}`;
+                       const cur=editVals[key]??val??"";
+                       const isEmpty=!val&&!editVals[key];
+                       const isJustFilled=!val&&!!editVals[key];
+                       const OPTS={
+                         "Industria":industries,
+                         "Software actual":compets,
+                         "Timeline":["Q3 2026","Q4 2026","Enero 2027","Febrero 2027","Inmediato","90 días","Fin de año"],
+                         "Decisor":["Carlos Mendoza (CFO)","Laura Ríos (CHRO)","Miguel Ángel Torres (Dir. Ops)","Patricia Vega (CEO)","Roberto Salinas (Dir. RRHH)","Ana González (COO)","Jorge Ramírez (VP Finanzas)","Sandra López (Dir. Admin)","Otro"],
+                         "Módulos interés":["Nómina","Nómina + Control de Asistencia","Nómina + Portal del Empleado","Nómina + Vacaciones + Contratos","Suite completa","Control de Asistencia + Reportes IMSS","Nómina + Evaluación de Desempeño"],
+                         "Pain principal":["Nómina manual en Excel","Errores frecuentes en IMSS","Sin portal de autoservicio","Alta rotación sin datos","Reportes HR tardíos","Sin control de asistencia digital","Cumplimiento SAT desactualizado","Cálculo manual de vacaciones"],
+                         "Stakeholders":["CEO + CHRO","CFO + Dir. RRHH","CEO + CFO + CHRO","Dir. RRHH + Contralor","VP Ops + Jefe Nómina","Dirección General","Comité directivo"],
+                         "Propuesta enviada":["Sí — versión inicial","Sí — versión revisada","Pendiente de aprobación interna","No enviada aún"],
+                       };
+                       const opts=OPTS[field];
+                       const borderColor=isJustFilled?C.green:isEmpty?C.red:C.navyLt;
+                       const bgColor=isJustFilled?C.green+"11":isEmpty?C.red+"11":C.navyMid;
+                       return <div key={field} style={{display:"grid",gridTemplateColumns:"130px 1fr",gap:6,alignItems:"center"}}>
+                         <div style={{display:"flex",alignItems:"center",gap:4}}>
+                           <span style={{fontSize:10}}>{isEmpty?"⚠":isJustFilled?"✓":"●"}</span>
+                           <span style={{color:isEmpty?C.red:isJustFilled?C.green:C.muted,fontSize:10,fontWeight:isEmpty?700:400}}>{field}</span>
+                         </div>
+                         {opts
+                           ?<select value={cur} onChange={e=>setEditVals(v=>({...v,[key]:e.target.value}))}
+                               style={{background:bgColor,border:`1px solid ${borderColor}`,borderRadius:5,padding:"4px 8px",color:isEmpty?"#E8445A":isJustFilled?C.green:C.white,fontSize:11,cursor:"pointer",width:"100%"}}>
+                               <option value="">— Seleccionar —</option>
+                               {opts.map(o=><option key={o} value={o}>{o}</option>)}
+                             </select>
+                           :<input value={cur} onChange={e=>setEditVals(v=>({...v,[key]:e.target.value}))}
+                               placeholder={isEmpty?"Ingresar...":val||""}
+                               style={{background:bgColor,border:`1px solid ${borderColor}`,borderRadius:5,padding:"4px 8px",color:isEmpty?C.red:isJustFilled?C.green:C.white,fontSize:11,width:"100%",boxSizing:"border-box"}}/>
+                         }
+                       </div>;
+                     })}
+                   </div>
+                   <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginTop:10,paddingTop:8,borderTop:`1px solid ${C.navyLt}`}}>
+                     {saved?<span style={{color:C.green,fontSize:11}}>✅ Guardado en HubSpot</span>:<span style={{color:C.muted,fontSize:10}}>Dropdowns → CRM limpio, sin typos</span>}
+                     <button onClick={()=>saveField(deal.id)} style={{background:"#FF7A59",color:C.white,border:"none",borderRadius:6,padding:"6px 16px",fontWeight:700,fontSize:11,cursor:"pointer"}}>Guardar en HubSpot →</button>
+                   </div>
+                 </div>}
+              </div>;
+            })}
+          </div>
+        </div>}
+      </div>
+    </div>
+  </div>;
+}
+
+// ── ALERTS SECTION ────────────────────────────────────────────────────────────
+function AlertsSection({clients}){
+  const [plans,setPlans]=useState({});
+  const [loadingId,setLoadingId]=useState(null);
+  const [wModal,setWModal]=useState(null);
+  const [wInput,setWInput]=useState(30);
+  const [openG,setOpenG]=useState({});
+  const [mailSel,setMailSel]=useState({});// {clientId: Set of item indices}
+  const [mailModal,setMailModal]=useState(null);// clientId
+  const [mailText,setMailText]=useState("");
+  const [mailLoading,setMailLoading]=useState(false);
+  const [mailSent,setMailSent]=useState(false);
+
+  const atRisk=clients.filter(c=>c.quadrant==="En Riesgo"||(c.quadrant==="Champion"&&c.usage<55)).sort((a,b)=>b.mrr-a.mrr).slice(0,10);
+  const today=new Date();
+  // Simulated alert log: one alert per at-risk client, sent X days ago
+  const alertLog=atRisk.map((c,i)=>{
+    const daysAgo=Math.floor(Math.random()*14)+1;
+    const sent=new Date(today);sent.setDate(sent.getDate()-daysAgo);
+    const alerts=[];
+    if(c.usage<40)alerts.push("Uso crítico");
+    if(c.nps<6)alerts.push(`NPS bajo (${c.nps}/10)`);
+    if(c.tickets>40)alerts.push(`${c.tickets} tickets abiertos`);
+    if(c.lastActivity>30)alerts.push(`Sin actividad ${c.lastActivity}d`);
+    if(c.quadrant==="Champion"&&c.usage<55)alerts.push("Champion en declive");
+    return{client:c,sentDate:sent,daysAgo,reason:alerts.join(" · ")||"Riesgo detectado",owner:c.csOwner};
+  });
+
+  function toggleMailSel(cid,idx){
+    setMailSel(prev=>{
+      const cur=new Set(prev[cid]||[]);
+      if(cur.has(idx))cur.delete(idx);else cur.add(idx);
+      return{...prev,[cid]:cur};
+    });
+  }
+
+  async function generateMail(cid){
+    const plan=plans[cid];if(!plan)return;
+    const client=atRisk.find(c=>c.id===cid);
+    const sel=mailSel[cid]||new Set();
+    const items=sel.size>0?plan.items.filter((_,i)=>sel.has(i)):plan.items;
+    setMailModal(cid);setMailLoading(true);setMailSent(false);
+    try{
+      const res=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:700,messages:[{role:"user",content:`Redacta un email de seguimiento en español para el cliente ${client.name} (${client.employees} empleados, MRR $${client.mrr.toLocaleString()}, NPS ${client.nps}/10, uso ${client.usage}%). El email es de Customer Success hacia el decisor del cliente. Incluye las siguientes acciones concretas a dar seguimiento: ${items.map(it=>`"${it.label}" (días ${it.startDay}-${it.endDay})`).join(", ")}. Tono: profesional pero cálido. Sin signos de gato ni asteriscos. Incluye asunto, saludo, cuerpo y firma "Worky Customer Success". Máximo 200 palabras.`}]})});
+      const data=await res.json();
+      setMailText(data.content?.find(b=>b.type==="text")?.text||"Error.");
+    }catch{setMailText("Error al generar el email.");}
+    setMailLoading(false);
+  }
+
+  async function fetchActions(client){
+    setLoadingId(client.id);
+    try{
+      const res=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:900,messages:[{role:"user",content:`Genera exactamente 6 action items para retener/reactivar este cliente de Worky (SaaS RRHH México). Responde SOLO con JSON sin markdown ni texto extra:
+{"items":[{"label":"acción específica y concreta","startDay":0,"endDay":5,"priority":"Alta"},{"label":"...","startDay":3,"endDay":10,"priority":"Alta"},{"label":"...","startDay":5,"endDay":15,"priority":"Media"},{"label":"...","startDay":8,"endDay":18,"priority":"Media"},{"label":"...","startDay":12,"endDay":22,"priority":"Baja"},{"label":"...","startDay":15,"endDay":30,"priority":"Baja"}]}
+Cliente: ${client.name} | ${client.employees}emp | $${client.mrr.toLocaleString()} MRR | NPS:${client.nps} | Uso:${client.usage}% | Tickets:${client.tickets} | Módulos:${client.modules.join(",")} | Dolores:${client.mainPain.join(",")}`}]})});
+      const data=await res.json();
+      let text=(data.content?.find(b=>b.type==="text")?.text||"{}").replace(/```json|```/g,"").trim();
+      const parsed=JSON.parse(text);
+      setWModal(client.id);setWInput(30);
+      setPlans(prev=>({...prev,[client.id]:{...parsed,startDate:new Date(),confirmed:false}}));
+    }catch{
+      setWModal(client.id);setWInput(30);
+      setPlans(prev=>({...prev,[client.id]:{items:[
+        {label:"Llamada de diagnóstico con decisor (30 min)",startDay:0,endDay:3,priority:"Alta"},
+        {label:"Revisar y escalar tickets críticos",startDay:1,endDay:5,priority:"Alta"},
+        {label:"Enviar reporte de valor generado (ROI)",startDay:3,endDay:8,priority:"Alta"},
+        {label:"Demo de módulos no adoptados",startDay:5,endDay:12,priority:"Media"},
+        {label:"Agendar QBR con stakeholders",startDay:8,endDay:18,priority:"Media"},
+        {label:"Propuesta de expansión o descuento renovación",startDay:15,endDay:30,priority:"Baja"},
+      ],startDate:new Date(),confirmed:false}}));
+    }
+    setLoadingId(null);
+  }
+
+  function confirmPlan(cid){
+    setPlans(prev=>({...prev,[cid]:{...prev[cid],confirmed:true,windowDays:wInput}}));
+    setWModal(null);setOpenG(prev=>({...prev,[cid]:true}));
+  }
+  function toggleDone(cid,idx){setPlans(prev=>{const p={...prev[cid]};p.items=p.items.map((it,i)=>i===idx?{...it,done:!it.done}:it);return{...prev,[cid]:p};});}
+  function updatePrio(cid,idx,v){setPlans(prev=>{const p={...prev[cid]};p.items=p.items.map((it,i)=>i===idx?{...it,priority:v}:it);return{...prev,[cid]:p};});}
+
+  return <div>
+    {/* Window modal */}
+    {wModal&&<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.78)",zIndex:999,display:"flex",alignItems:"center",justifyContent:"center"}}>
+      <div style={{background:C.navyMid,border:`2px solid ${C.teal}`,borderRadius:14,padding:26,maxWidth:360,width:"90%",textAlign:"center"}}>
+        <div style={{fontSize:28,marginBottom:7}}>⏱️</div>
+        <div style={{color:C.white,fontWeight:800,fontSize:15,marginBottom:4}}>¿En cuántos días trabajarás el plan?</div>
+        <div style={{color:C.muted,fontSize:12,marginBottom:16}}>Define la ventana del Gantt y las fechas de cada acción</div>
+        <div style={{display:"flex",justifyContent:"center",gap:7,marginBottom:12,flexWrap:"wrap"}}>
+          {[14,21,30,45,60].map(d=><button key={d} onClick={()=>setWInput(d)} style={{background:wInput===d?C.teal:C.navyLt,color:wInput===d?C.navy:C.sandDim,border:"none",borderRadius:6,padding:"6px 12px",fontWeight:700,fontSize:13,cursor:"pointer"}}>{d}d</button>)}
+        </div>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:8,marginBottom:16}}>
+          <input type="number" min={7} max={120} value={wInput} onChange={e=>setWInput(Number(e.target.value))} style={{width:65,background:C.navy,border:`1px solid ${C.teal}`,borderRadius:6,padding:"7px",color:C.white,fontSize:18,fontWeight:700,textAlign:"center"}}/>
+          <span style={{color:C.sandDim,fontSize:14}}>días</span>
+        </div>
+        <div style={{display:"flex",gap:9,justifyContent:"center"}}>
+          <button onClick={()=>{setWModal(null);setPlans(prev=>{const p={...prev};delete p[wModal];return p;});}} style={{background:C.navyLt,color:C.muted,border:"none",borderRadius:7,padding:"8px 16px",fontWeight:700,cursor:"pointer"}}>Cancelar</button>
+          <button onClick={()=>confirmPlan(wModal)} style={{background:C.teal,color:C.navy,border:"none",borderRadius:7,padding:"8px 20px",fontWeight:800,fontSize:13,cursor:"pointer"}}>Crear Gantt →</button>
+        </div>
+      </div>
+    </div>}
+
+    {/* Mail modal */}
+    {mailModal&&<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.78)",zIndex:999,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
+      <div style={{background:C.navyMid,border:`2px solid ${C.purple}`,borderRadius:14,padding:22,maxWidth:520,width:"100%",maxHeight:"85vh",overflowY:"auto"}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+          <div style={{color:C.purple,fontWeight:800,fontSize:14}}>📧 Email de Seguimiento</div>
+          <button onClick={()=>setMailModal(null)} style={{background:"none",border:"none",color:C.muted,cursor:"pointer",fontSize:16}}>✕</button>
+        </div>
+        {mailLoading?<div style={{textAlign:"center",padding:"40px 0"}}><div style={{color:C.teal,fontSize:30}}>⚡</div><div style={{color:C.sandDim,marginTop:8}}>Redactando email...</div></div>
+        :<>
+          <textarea value={mailText} onChange={e=>setMailText(e.target.value)} rows={10} style={{width:"100%",background:C.navy,border:`1px solid ${C.navyLt}`,borderRadius:7,padding:"10px 12px",color:C.white,fontSize:12,resize:"vertical",boxSizing:"border-box",lineHeight:1.7}}/>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginTop:10}}>
+            {mailSent?<span style={{color:C.green,fontSize:11}}>✅ Email enviado (simulado)</span>:<span/>}
+            <div style={{display:"flex",gap:7}}>
+              <button onClick={()=>{setMailSent(true);setTimeout(()=>setMailSent(false),3000);}} style={{background:C.purple,color:C.white,border:"none",borderRadius:6,padding:"7px 16px",fontWeight:700,fontSize:11,cursor:"pointer"}}>📧 Enviar</button>
+            </div>
+          </div>
+        </>}
+      </div>
+    </div>}
+
+    <div style={{background:C.navyMid,borderRadius:10,border:`1px solid ${C.navyLt}`,overflow:"hidden",marginBottom:20}}>
+      <div style={{padding:"10px 14px",background:C.navyLt,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+        <div style={{color:C.teal,fontWeight:800,fontSize:11}}>📋 SISTEMA DE ALERTAS — LOG DE NOTIFICACIONES ENVIADAS</div>
+        <span style={{color:C.muted,fontSize:10}}>El KAM debe entrar aquí a dar seguimiento</span>
+      </div>
+      <div style={{overflowX:"auto"}}>
+        <table style={{width:"100%",borderCollapse:"collapse",fontSize:11}}>
+          <thead>
+            <tr style={{background:C.navy}}>
+              {["MRR ↓","Empresa","Industria","Owner / KAM","Razón de Alerta","Alerta Enviada","Estado"].map(h=><th key={h} style={{padding:"7px 10px",textAlign:"left",color:C.muted,fontWeight:700,fontSize:9,whiteSpace:"nowrap"}}>{h}</th>)}
+            </tr>
+          </thead>
+          <tbody>
+            {alertLog.map((row,i)=>{
+              const urgency=row.daysAgo>7?{label:"Sin seguimiento",color:C.red}:row.daysAgo>3?{label:"Pendiente",color:C.amber}:{label:"Reciente",color:C.teal};
+              return <tr key={row.client.id} style={{background:i%2===0?C.navyMid:C.navy,borderBottom:`1px solid ${C.navyLt}22`}}>
+                <td style={{padding:"6px 10px",color:C.teal,fontWeight:700,fontSize:11}}>{fmtMXN(row.client.mrr)}</td>
+                <td style={{padding:"6px 10px",color:C.white,fontWeight:600,maxWidth:130,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{row.client.name.split(" ").slice(0,3).join(" ")}</td>
+                <td style={{padding:"6px 10px",color:C.sandDim,fontSize:10}}>{row.client.industry}</td>
+                <td style={{padding:"6px 10px",color:C.sandDim,fontSize:10}}>{row.owner}</td>
+                <td style={{padding:"6px 10px",color:C.amber,fontSize:10,maxWidth:200}}>{row.reason}</td>
+                <td style={{padding:"6px 10px",color:C.muted,fontSize:10,whiteSpace:"nowrap"}}>hace {row.daysAgo}d · {row.sentDate.toLocaleDateString("es-MX",{day:"numeric",month:"short"})}</td>
+                <td style={{padding:"6px 10px"}}><span style={{background:urgency.color+"22",color:urgency.color,border:`1px solid ${urgency.color}44`,borderRadius:4,padding:"2px 7px",fontSize:9,fontWeight:700}}>{urgency.label}</span></td>
+              </tr>;
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div style={{color:C.amber,fontWeight:800,fontSize:12,letterSpacing:"0.06em",marginBottom:12}}>🚨 RADAR DE ALERTAS — CLIENTES QUE REQUIEREN ACCIÓN</div>
+    <div style={{display:"flex",flexDirection:"column",gap:10}}>
+      {atRisk.map(c=>{
+        const plan=plans[c.id];
+        const isOpen=openG[c.id];
+        const selSet=mailSel[c.id]||new Set();
+        const overdue=plan?.items?.filter(it=>!it.done&&today>new Date(plan.startDate.getTime()+it.endDay*86400000)).length||0;
+        const alerts=[];
+        if(c.usage<40)alerts.push({l:"Uso crítico",co:C.red});
+        if(c.nps<6)alerts.push({l:"NPS bajo",co:C.red});
+        if(c.tickets>40)alerts.push({l:"Tickets alto",co:C.amber});
+        if(c.lastActivity>30)alerts.push({l:"Sin actividad 30d+",co:C.amber});
+        if(c.quadrant==="Champion"&&c.usage<55)alerts.push({l:"Champion en declive",co:C.purple});
+
+        return <div key={c.id} style={{background:C.navyMid,borderRadius:10,border:`1px solid ${C.navyLt}`,overflow:"hidden",borderLeft:`4px solid ${alerts[0]?.co||C.amber}`}}>
+          <div style={{padding:"11px 14px"}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",flexWrap:"wrap",gap:8}}>
+              <div>
+                <div style={{color:C.white,fontWeight:700,fontSize:13}}>{c.name.split(" ").slice(0,4).join(" ")}</div>
+                <div style={{color:C.muted,fontSize:11,marginTop:2}}>{c.employees}emp · {fmtMXN(c.mrr)} MRR · CS: {c.csOwner}</div>
+                <div style={{display:"flex",gap:5,marginTop:5,flexWrap:"wrap"}}>
+                  {alerts.map(a=><Badge key={a.l} color={a.co} small>{a.l}</Badge>)}
+                  {overdue>0&&<Badge color={C.red} small>⏰ {overdue} vencida{overdue>1?"s":""}</Badge>}
+                </div>
+              </div>
+              <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+                {plan?.confirmed&&selSet.size>0&&<button onClick={()=>generateMail(c.id)} style={{background:C.purple,color:C.white,border:"none",borderRadius:6,padding:"5px 11px",fontWeight:700,fontSize:11,cursor:"pointer"}}>📧 Mail ({selSet.size})</button>}
+                {plan?.confirmed&&selSet.size===0&&<button onClick={()=>generateMail(c.id)} style={{background:C.purple+"22",color:C.purple,border:`1px solid ${C.purple}44`,borderRadius:6,padding:"5px 11px",fontWeight:700,fontSize:11,cursor:"pointer"}}>📧 Mail completo</button>}
+                {plan?.confirmed&&<button onClick={()=>setOpenG(prev=>({...prev,[c.id]:!isOpen}))} style={{background:isOpen?C.navyLt:C.blue+"22",color:isOpen?C.muted:C.blue,border:`1px solid ${isOpen?C.navyLt:C.blue+"44"}`,borderRadius:6,padding:"5px 11px",fontWeight:700,fontSize:11,cursor:"pointer"}}>{isOpen?"▲ Gantt":"📅 Gantt"}</button>}
+                <button onClick={()=>fetchActions(c)} disabled={loadingId===c.id} style={{background:loadingId===c.id?C.navyLt:C.teal,color:loadingId===c.id?C.muted:C.navy,border:"none",borderRadius:6,padding:"5px 11px",fontWeight:700,fontSize:11,cursor:loadingId===c.id?"not-allowed":"pointer"}}>
+                  {loadingId===c.id?"⚡ Analizando...":plan?.confirmed?"🔄 Nuevo Plan":"🤖 Generar Plan"}
+                </button>
+              </div>
+            </div>
+          </div>
+          {plan?.confirmed&&isOpen&&<div style={{borderTop:`1px solid ${C.navyLt}`}}>
+            {/* Action items */}
+            <div style={{padding:"5px 14px 0",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+              <div style={{color:C.muted,fontSize:10,fontWeight:700,letterSpacing:"0.06em"}}>ACTION ITEMS</div>
+              <div style={{color:C.muted,fontSize:10}}>Ventana: {plan.windowDays} días (hasta {fmtDate(plan.startDate,plan.windowDays)})</div>
+            </div>
+            {plan.items.map((item,idx)=>{
+              const end=new Date(plan.startDate.getTime()+item.endDay*86400000);
+              const start=new Date(plan.startDate.getTime()+item.startDay*86400000);
+              const isOv=today>end&&!item.done;
+              const isSel=selSet.has(idx);
+              return <div key={idx} style={{padding:"6px 14px",display:"flex",alignItems:"center",gap:7,borderBottom:`1px solid ${C.navyLt}22`,background:isOv?"#E8445A08":isSel?"#9B59B611":"transparent"}}>
+                <input type="checkbox" checked={!!item.done} onChange={()=>toggleDone(c.id,idx)} style={{accentColor:C.teal,cursor:"pointer",flexShrink:0}}/>
+                <div style={{flex:1,color:item.done?C.muted:isOv?C.red:C.sandDim,fontSize:12,textDecoration:item.done?"line-through":"none"}}>{item.label}</div>
+                {/* Date range from window */}
+                <span style={{color:C.muted,fontSize:10,whiteSpace:"nowrap",minWidth:100,textAlign:"right"}}>
+                  {fmtDate(plan.startDate,item.startDay)} → {fmtDate(plan.startDate,item.endDay)}
+                </span>
+                {isOv&&!item.done&&<span style={{color:C.red,fontSize:9,fontWeight:700,flexShrink:0}}>VENCIDA⚠</span>}
+                <select value={item.priority} onChange={e=>updatePrio(c.id,idx,e.target.value)} style={{background:prioColor[item.priority]+"22",color:prioColor[item.priority],border:`1px solid ${prioColor[item.priority]}44`,borderRadius:4,padding:"2px 5px",fontSize:10,fontWeight:700,cursor:"pointer",flexShrink:0}}>
+                  <option value="Alta">Alta</option><option value="Media">Media</option><option value="Baja">Baja</option>
+                </select>
+                {/* Mail toggle */}
+                <button onClick={()=>toggleMailSel(c.id,idx)} title="Incluir en email" style={{background:isSel?C.purple:C.navyLt,color:isSel?C.white:C.muted,border:`1px solid ${isSel?C.purple:C.navyLt}`,borderRadius:4,padding:"2px 7px",fontSize:10,cursor:"pointer",flexShrink:0}}>✉</button>
+              </div>;
+            })}
+            {/* Gantt */}
+            <GanttChart items={plan.items} startDate={plan.startDate} windowDays={plan.windowDays||30} onToggle={(idx)=>toggleDone(c.id,idx)}/>
+          </div>}
+        </div>;
+      })}
+    </div>
+  </div>;
+}
+
+// ── GANTT CHART ───────────────────────────────────────────────────────────────
+function GanttChart({items,startDate,windowDays,onToggle}){
+  const today=new Date();
+  const step=Math.max(1,Math.floor(windowDays/5));
+  const dayLabels=[];
+  for(let i=0;i<=windowDays;i+=step){dayLabels.push({day:i,label:fmtDate(startDate,i)});}
+  const todayOff=Math.max(0,Math.min(windowDays,(today-startDate)/86400000));
+  return <div style={{background:C.navyMid,borderTop:`1px solid ${C.navyLt}`,overflow:"hidden"}}>
+    <div style={{padding:"7px 14px",display:"flex",justifyContent:"space-between",flexWrap:"wrap",gap:5}}>
+      <div style={{color:C.blue,fontWeight:800,fontSize:10}}>📅 GANTT INTERACTIVO</div>
+      <div style={{color:C.muted,fontSize:10}}>{fmtDate(startDate,0)} — {fmtDate(startDate,windowDays)} · {windowDays}d</div>
+    </div>
+    <div style={{overflowX:"auto"}}><div style={{minWidth:520}}>
+      <div style={{display:"grid",gridTemplateColumns:"180px 1fr",borderBottom:`1px solid ${C.navyLt}`}}>
+        <div style={{padding:"4px 10px",background:C.navyLt,color:C.muted,fontSize:9,fontWeight:700}}>ACCIÓN</div>
+        <div style={{position:"relative",background:C.navyLt,height:22}}>
+          {dayLabels.map(dl=><span key={dl.day} style={{position:"absolute",left:`${(dl.day/windowDays)*100}%`,color:C.muted,fontSize:8,transform:"translateX(-50%)",whiteSpace:"nowrap",top:6}}>{dl.label}</span>)}
+        </div>
+      </div>
+      {items.map((item,idx)=>{
+        const endDate=new Date(startDate.getTime()+item.endDay*86400000);
+        const isOv=today>endDate&&!item.done;
+        const barL=(item.startDay/windowDays)*100;
+        const barW=Math.max(1,((item.endDay-item.startDay)/windowDays)*100);
+        return <div key={idx} style={{display:"grid",gridTemplateColumns:"180px 1fr",borderBottom:`1px solid ${C.navyLt}11`,background:isOv?"#E8445A06":"transparent"}}>
+          <div style={{padding:"5px 10px",display:"flex",alignItems:"center",gap:5,borderRight:`1px solid ${C.navyLt}22`}}>
+            <input type="checkbox" checked={!!item.done} onChange={()=>onToggle(idx)} style={{accentColor:C.teal,cursor:"pointer",flexShrink:0}}/>
+            <span style={{color:item.done?C.muted:isOv?C.red:C.sandDim,fontSize:9,textDecoration:item.done?"line-through":"none",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{item.label}</span>
+          </div>
+          <div style={{position:"relative",height:28}}>
+            <div style={{position:"absolute",left:`${(todayOff/windowDays)*100}%`,top:0,bottom:0,width:1,background:C.green,opacity:0.6,zIndex:2}}/>
+            <div style={{position:"absolute",left:`${barL}%`,width:`${barW}%`,top:5,height:18,background:item.done?C.muted:prioColor[item.priority]||C.teal,borderRadius:3,opacity:item.done?0.3:0.9,display:"flex",alignItems:"center",paddingLeft:5,overflow:"hidden",zIndex:1}}>
+              <span style={{color:C.navy,fontSize:8,fontWeight:700,whiteSpace:"nowrap"}}>{item.done?"✓ ":""}{item.priority}</span>
+            </div>
+          </div>
+        </div>;
+      })}
+    </div></div>
+    <div style={{padding:"5px 14px",background:C.navyLt+"33",display:"flex",gap:12,flexWrap:"wrap"}}>
+      <span style={{color:C.muted,fontSize:9,display:"flex",alignItems:"center",gap:3}}><span style={{width:12,height:2,background:C.green,display:"inline-block"}}/> Hoy</span>
+      <span style={{color:C.muted,fontSize:9}}>{items.filter(i=>i.done).length}/{items.length} completados</span>
+    </div>
+  </div>;
+}
+
+// ── METRICS SECTION ───────────────────────────────────────────────────────────
+// Historical trend data (simulated Q1'22 → Q1'24)
+const HIST_QUARTERS=["Q1'22","Q2'22","Q3'22","Q4'22","Q1'23","Q2'23","Q3'23","Q4'23","Q1'24"];
+const HIST={
+  nrr:      [88,90,93,97,99,101,104,107,110],
+  churnRate:[14,13,12,11,10.5,9.8,9.2,8.5,7.8],
+  expansionMRR:[120,145,160,190,220,255,280,310,345],// K MXN
+  churnMRR: [310,280,255,240,220,200,185,170,155],// K MXN
+  downsellMRR:[60,55,50,48,42,38,35,32,28],// K MXN
+  cac:      [18500,17200,16800,16000,15500,14900,14200,13800,13200],// MXN
+  ltv:      [85000,90000,95000,102000,108000,115000,122000,130000,138000],// MXN
+  nps:      [6.2,6.5,6.8,7.0,7.2,7.4,7.6,7.8,8.0],
+  cacPayback:[9,8.8,8.5,8.2,7.9,7.6,7.3,7.0,6.8],// months
+};
+
+function MetricsSection({clients}){
+  // Current derived metrics
+  const active=clients.filter(c=>!c.churn);
+  const totalMRR=active.reduce((s,c)=>s+c.mrr,0);
+  const churnMRR=clients.filter(c=>c.churn).reduce((s,c)=>s+c.mrr,0);
+  const expMRR=active.reduce((s,c)=>s+c.expansionMRR,0);
+  const downsellMRR=active.filter(c=>c.downsell).reduce((s,c)=>s+c.downsellAmt,0);
+  const nrrCalc=totalMRR>0?((totalMRR+expMRR-churnMRR-downsellMRR)/totalMRR*100):100;
+  const avgNPS=active.reduce((s,c)=>s+c.nps,0)/(active.length||1);
+  const avgCac=active.reduce((s,c)=>s+c.mrr*c.cacPayback,0)/(active.length||1);
+  const avgLtv=active.reduce((s,c)=>s+c.ltv,0)/(active.length||1);
+  const ltvCac=avgCac>0?(avgLtv/avgCac):0;
+  const avgPayback=active.reduce((s,c)=>s+c.cacPayback,0)/(active.length||1);
+  const churnRate=(clients.filter(c=>c.churn).length/clients.length)*100;
+
+  // Simulator state — sliders control deltas from current
+  const [sim,setSim]=useState({
+    nrr:Math.round(nrrCalc),
+    churnRate:Math.round(churnRate),
+    nps:Math.round(avgNPS*10),// ×10 for integer slider
+    expansionPct:Math.round((expMRR/totalMRR)*100),
+    cacPayback:Math.round(avgPayback),
+    ltvCac:Math.round(ltvCac*10),// ×10
+  });
+  const [aiInsight,setAiInsight]=useState(null);
+  const [aiLoading,setAiLoading]=useState(false);
+  const [aiMode,setAiMode]=useState(null);// "good"|"bad"
+
+  const sliders=[
+    {key:"nrr",label:"NRR",unit:"%",min:60,max:140,good:v=>v>=100,base:Math.round(nrrCalc),desc:"Net Revenue Retention"},
+    {key:"churnRate",label:"Churn Rate",unit:"%",min:0,max:20,good:v=>v<=8,base:Math.round(churnRate),desc:"% clientes perdidos / mes",invert:true},
+    {key:"nps",label:"NPS ×10",unit:"",min:10,max:100,good:v=>v>=70,base:Math.round(avgNPS*10),desc:"NPS score ×10 (70=7.0)"},
+    {key:"expansionPct",label:"Expansión MRR",unit:"%",min:0,max:40,good:v=>v>=15,base:Math.round((expMRR/totalMRR)*100),desc:"% de MRR por upsell/expansión"},
+    {key:"cacPayback",label:"CAC Payback",unit:"m",min:1,max:36,good:v=>v<=12,base:Math.round(avgPayback),desc:"Meses para recuperar CAC",invert:true},
+    {key:"ltvCac",label:"LTV:CAC ×10",unit:"",min:5,max:80,good:v=>v>=30,base:Math.round(ltvCac*10),desc:"LTV/CAC ×10 (30=3.0x)"},
+  ];
+
+  function isHealthy(){
+    return sim.nrr>=100&&sim.churnRate<=8&&sim.nps>=70&&sim.expansionPct>=15&&sim.cacPayback<=12&&sim.ltvCac>=30;
+  }
+
+  async function getAiInsight(mode){
+    setAiMode(mode);setAiLoading(true);setAiInsight(null);
+    const ctx=`NRR: ${sim.nrr}%, Churn Rate: ${sim.churnRate}%, NPS: ${(sim.nps/10).toFixed(1)}/10, Expansión MRR: ${sim.expansionPct}%, CAC Payback: ${sim.cacPayback} meses, LTV:CAC: ${(sim.ltvCac/10).toFixed(1)}x.
+Base de datos: ${ALL_CLIENTS.filter(c=>!c.churn).length} clientes activos, MRR total $${(totalMRR/1000).toFixed(0)}K MXN, industrias: Manufactura, Retail, Tecnología, Salud, Logística, entre otras. Mercado SaaS RRHH México 2024.`;
+    const prompt=mode==="good"
+      ?`Eres un experto en Revenue Operations para SaaS en Latinoamérica. Las siguientes métricas son positivas o están mejorando: ${ctx}. Lista exactamente 6 factores concretos que explicarían este crecimiento, basados en: (1) comportamiento de la base de clientes de Worky, (2) benchmarks de SaaS LATAM/México 2023-2024 (Bessemer, SaaS Capital, datos públicos), (3) tendencias del mercado de nómina y RRHH en México. Formato: lista con "- " para cada punto. Sin # ni **. En español.`
+      :`Eres un experto en Revenue Operations para SaaS en Latinoamérica. Las siguientes métricas son negativas o preocupantes: ${ctx}. Lista exactamente 6 causas probables y concretas de este deterioro, basadas en: (1) patrones de churn en la base de clientes de Worky, (2) competencia: ADP, CONTPAQi, Aspel NOI, SAP HR, (3) factores macro: SAT, IMSS, reforma laboral México, (4) benchmarks SaaS LATAM. Formato: lista con "- " para cada punto. Sin # ni **. En español.`;
+    try{
+      const res=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:700,messages:[{role:"user",content:prompt}]})});
+      const data=await res.json();
+      setAiInsight(data.content?.find(b=>b.type==="text")?.text||"Error.");
+    }catch{setAiInsight("Error al conectar.");}
+    setAiLoading(false);
+  }
+
+  // Mini trend chart
+  function TrendChart({histKey,label,unit,invertGood}){
+    const vals=HIST[histKey];
+    const max=Math.max(...vals);const min=Math.min(...vals);
+    const range=max-min||1;
+    const last=vals[vals.length-1];const prev=vals[vals.length-2];
+    const up=last>prev;const good=invertGood?!up:up;
+    const COLS=9;const W=160;const H=44;const BAR=W/COLS-2;
+    return <div style={{background:C.navyMid,borderRadius:8,padding:"10px 12px",border:`1px solid ${C.navyLt}`}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:6}}>
+        <div style={{color:C.sandDim,fontSize:10,fontWeight:700}}>{label}</div>
+        <div style={{color:good?C.green:C.red,fontSize:10,fontWeight:700}}>{up?"↑":"↓"} {Math.abs(((last-prev)/prev)*100).toFixed(1)}% QoQ</div>
+      </div>
+      <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`}>
+        {vals.map((v,i)=>{
+          const bh=Math.max(3,((v-min)/range)*(H-8));
+          const x=i*(BAR+2);const y=H-bh;
+          const isLast=i===COLS-1;
+          return <rect key={i} x={x} y={y} width={BAR} height={bh} rx={2} fill={isLast?(good?C.green:C.red):C.navyLt}/>;
+        })}
+      </svg>
+      <div style={{display:"flex",justifyContent:"space-between",marginTop:2}}>
+        <span style={{color:C.muted,fontSize:8}}>{HIST_QUARTERS[0]}</span>
+        <span style={{color:good?C.green:C.red,fontSize:10,fontWeight:800}}>{last}{unit}</span>
+        <span style={{color:C.muted,fontSize:8}}>{HIST_QUARTERS[HIST_QUARTERS.length-1]}</span>
+      </div>
+    </div>;
+  }
+
+  const kpis=[
+    {icon:"💰",label:"MRR Total",value:`$${(totalMRR/1000).toFixed(0)}K`,sub:"MXN/mes",color:C.teal},
+    {icon:"📈",label:"NRR",value:`${nrrCalc.toFixed(0)}%`,sub:"Net Revenue Retention",color:nrrCalc>=100?C.green:C.amber},
+    {icon:"🔄",label:"Churn Rate",value:`${churnRate.toFixed(1)}%`,sub:"% clientes perdidos",color:churnRate<=8?C.green:C.red},
+    {icon:"⭐",label:"NPS",value:`${avgNPS.toFixed(1)}/10`,sub:"Promotores activos",color:avgNPS>=8?C.green:avgNPS>=6?C.amber:C.red},
+    {icon:"🏆",label:"LTV:CAC",value:`${ltvCac.toFixed(1)}x`,sub:"Eficiencia de adquisición",color:ltvCac>=3?C.green:C.amber},
+    {icon:"⏱️",label:"CAC Payback",value:`${avgPayback.toFixed(1)}m`,sub:"Meses para recuperar CAC",color:avgPayback<=12?C.green:C.amber},
+    {icon:"🚀",label:"Expansión MRR",value:`$${(expMRR/1000).toFixed(0)}K`,sub:"Upsell/cross-sell",color:C.purple},
+    {icon:"📉",label:"Churn MRR",value:`$${(churnMRR/1000).toFixed(0)}K`,sub:"MRR perdido por churn",color:C.red},
+    {icon:"⬇️",label:"Downsell MRR",value:`$${(downsellMRR/1000).toFixed(0)}K`,sub:"MRR reducido",color:C.amber},
+  ];
+
+  const healthy=isHealthy();
+
+  return <div>
+    {/* KPI Grid */}
+    <div style={{color:C.teal,fontWeight:800,fontSize:12,letterSpacing:"0.06em",marginBottom:12}}>📊 KPIs CLAVE — VISIÓN HEAD OF REVOPS</div>
+    <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:10,marginBottom:18,flexWrap:"wrap"}}>
+      {kpis.map(k=><StatCard key={k.label} icon={k.icon} label={k.label} value={k.value} color={k.color} sub={k.sub}/>)}
+    </div>
+
+    {/* Trend charts QoQ */}
+    <div style={{color:C.sandDim,fontWeight:800,fontSize:11,marginBottom:10}}>📉 TENDENCIAS QoQ — Q1'22 a Q1'24</div>
+    <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8,marginBottom:20}}>
+      <TrendChart histKey="nrr" label="NRR" unit="%"/>
+      <TrendChart histKey="churnRate" label="Churn Rate" unit="%" invertGood/>
+      <TrendChart histKey="expansionMRR" label="Expansión MRR" unit="K"/>
+      <TrendChart histKey="nps" label="NPS" unit=""/>
+      <TrendChart histKey="cac" label="CAC" unit="K" invertGood/>
+      <TrendChart histKey="ltv" label="LTV" unit="K"/>
+    </div>
+
+    {/* Simulator */}
+    <div style={{background:C.navyMid,borderRadius:12,border:`2px solid ${C.purple}44`,padding:18,marginBottom:16}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14,flexWrap:"wrap",gap:8}}>
+        <div>
+          <div style={{color:C.purple,fontWeight:800,fontSize:13}}>🎛️ SIMULADOR DE MÉTRICAS</div>
+          <div style={{color:C.muted,fontSize:11,marginTop:2}}>Mueve los sliders y el AI te explicará por qué sube o baja el negocio</div>
+        </div>
+        <div style={{display:"flex",gap:8}}>
+          <button onClick={()=>getAiInsight("good")} disabled={aiLoading} style={{background:C.green+"22",color:C.green,border:`1px solid ${C.green}44`,borderRadius:7,padding:"7px 14px",fontWeight:700,fontSize:11,cursor:"pointer"}}>
+            ✅ ¿Por qué crece?
+          </button>
+          <button onClick={()=>getAiInsight("bad")} disabled={aiLoading} style={{background:C.red+"22",color:C.red,border:`1px solid ${C.red}44`,borderRadius:7,padding:"7px 14px",fontWeight:700,fontSize:11,cursor:"pointer"}}>
+            🚨 ¿Por qué cae?
+          </button>
+        </div>
+      </div>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+        {sliders.map(sl=>{
+          const val=sim[sl.key];
+          const good=sl.good(val);
+          const diff=val-sl.base;
+          const dir=diff===0?"—":diff>0?`+${diff}`:String(diff);
+          const dirColor=diff===0?C.muted:(sl.invert?(diff<0?C.green:C.red):(diff>0?C.green:C.red));
+          return <div key={sl.key}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
+              <div>
+                <span style={{color:C.white,fontWeight:700,fontSize:12}}>{sl.label}</span>
+                <span style={{color:C.muted,fontSize:10,marginLeft:6}}>{sl.desc}</span>
+              </div>
+              <div style={{display:"flex",gap:6,alignItems:"center"}}>
+                <span style={{color:dirColor,fontSize:10,fontWeight:700}}>{dir}</span>
+                <span style={{color:good?C.green:C.red,fontWeight:800,fontSize:13}}>{val}{sl.unit}</span>
+              </div>
+            </div>
+            <div style={{display:"flex",alignItems:"center",gap:8}}>
+              <span style={{color:C.muted,fontSize:9}}>{sl.min}</span>
+              <input type="range" min={sl.min} max={sl.max} value={val} onChange={e=>setSim(s=>({...s,[sl.key]:Number(e.target.value)}))} style={{flex:1,accentColor:good?C.green:C.red,cursor:"pointer"}}/>
+              <span style={{color:C.muted,fontSize:9}}>{sl.max}</span>
+            </div>
+            <div style={{display:"flex",justifyContent:"space-between",marginTop:2}}>
+              <span style={{color:C.muted,fontSize:9}}>Base: {sl.base}{sl.unit}</span>
+              <span style={{color:good?C.green:C.red,fontSize:9,fontWeight:700}}>{good?"✅ Saludable":"⚠ Requiere atención"}</span>
+            </div>
+          </div>;
+        })}
+      </div>
+      {/* Health summary */}
+      <div style={{marginTop:14,background:healthy?C.green+"11":C.red+"11",borderRadius:8,padding:"9px 12px",border:`1px solid ${healthy?C.green+"33":C.red+"33"}`}}>
+        <div style={{color:healthy?C.green:C.red,fontWeight:800,fontSize:11}}>{healthy?"✅ PERFIL SALUDABLE — Empresa en posición de crecimiento sostenible":"⚠ PERFIL DE RIESGO — Requiere ajuste estratégico en las métricas críticas"}</div>
+        <div style={{color:C.muted,fontSize:10,marginTop:3}}>NRR≥100% · Churn≤8% · NPS≥7.0 · Expansión≥15% · Payback≤12m · LTV:CAC≥3x</div>
+      </div>
+    </div>
+
+    {/* AI Insight */}
+    {(aiLoading||aiInsight)&&<div style={{background:C.navyMid,borderRadius:10,border:`1px solid ${aiMode==="good"?C.green+"44":C.red+"44"}`,padding:16}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+        <div style={{color:aiMode==="good"?C.green:C.red,fontWeight:800,fontSize:12}}>
+          {aiMode==="good"?"✅ Factores de Crecimiento — Análisis IA":"🚨 Causas de Deterioro — Análisis IA"}
+        </div>
+        {!aiLoading&&<button onClick={()=>setAiInsight(null)} style={{background:"none",border:"none",color:C.muted,cursor:"pointer",fontSize:14}}>✕</button>}
+      </div>
+      {aiLoading?<div style={{display:"flex",alignItems:"center",gap:8}}><div style={{color:C.teal,fontSize:20}}>⚡</div><span style={{color:C.muted,fontSize:12}}>Analizando datos históricos y benchmarks SaaS LATAM...</span></div>
+      :<RichText text={aiInsight}/>}
+    </div>}
+  </div>;
+}
+
+// ── MAIN APP ──────────────────────────────────────────────────────────────────
+function WorkyRevOps(){
+  const [tab,setTab]=useState("matrix");
+  const tabs=[
+    {id:"matrix",icon:"🧩",label:"Revenue Matrix"},
+    {id:"pipeline",icon:"🔀",label:"Pipeline & Funnel"},
+    {id:"handoff",icon:"🤝",label:"AI Handoff Brief"},
+    {id:"alerts",icon:"🚨",label:"Alertas & Acción"},
+    
+  ];
+  return <div style={{background:C.navy,minHeight:"100vh",fontFamily:"'Inter','Segoe UI',sans-serif",color:C.white}}>
+    <div style={{background:"#183B59",borderBottom:"1px solid #254F79",padding:"0 20px",position:"sticky",top:0,zIndex:100}}>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"10px 0",flexWrap:"wrap",gap:8}}>
+        <div style={{display:"flex",alignItems:"center",gap:10}}>
+          <div style={{background:"#0A8CBF",color:"#FFFFFF",fontWeight:800,fontSize:15,padding:"5px 14px",borderRadius:6,letterSpacing:"0.04em"}}>Worky</div>
+          <div>
+            <div style={{color:C.white,fontWeight:800,fontSize:14}}>Revenue Operations Intelligence</div>
+            <div style={{color:C.muted,fontSize:9,letterSpacing:"0.05em"}}>200 CLIENTES · PIPELINE ACTIVO · POWERED BY CLAUDE AI</div>
+          </div>
+        </div>
+        <div style={{background:"#07B2D922",color:"#07B2D9",fontSize:10,fontWeight:700,padding:"3px 10px",borderRadius:20,border:"1px solid #07B2D944"}}>● LIVE DEMO</div>
+      </div>
+      <div style={{display:"flex",gap:0,overflowX:"auto",paddingBottom:1}}>
+        {tabs.map(t=><button key={t.id} onClick={()=>setTab(t.id)} style={{background:"none",border:"none",borderBottom:tab===t.id?`2px solid ${C.teal}`:"2px solid transparent",color:tab===t.id?C.teal:C.muted,padding:"10px 15px",cursor:"pointer",fontWeight:tab===t.id?800:500,fontSize:11,letterSpacing:"0.04em",whiteSpace:"nowrap",transition:"color 0.2s"}}>{t.icon} {t.label}</button>)}
+      </div>
+    </div>
+    <div style={{padding:"16px 20px",maxWidth:1200,margin:"0 auto"}}>
+      {tab==="matrix"&&<MatrixSection clients={ALL_CLIENTS}/>}
+      {tab==="pipeline"&&<PipelineFunnelSection pipeline={ALL_PIPELINE}/>}
+      {tab==="handoff"&&<HandoffSection clients={ALL_CLIENTS}/>}
+      {tab==="alerts"&&<AlertsSection clients={ALL_CLIENTS}/>}
+      
+    </div>
+  </div>;
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(React.createElement(WorkyRevOps));
+</script>
+</body>
+</html>
